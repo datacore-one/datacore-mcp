@@ -1,10 +1,7 @@
 // src/tools/discover.ts
 import * as fs from 'fs'
 import * as path from 'path'
-import { createRequire } from 'module'
-
-const require = createRequire(import.meta.url)
-const registry = require('../../registry/packs.json')
+import registry from '../../registry/packs.json'
 
 interface RegistryPack {
   id: string; name: string; description: string; version: string

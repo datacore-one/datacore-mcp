@@ -1,8 +1,5 @@
 // src/version.ts
-import { createRequire } from 'module'
-
-const require = createRequire(import.meta.url)
-const pkg = require('../package.json')
+import pkg from '../package.json'
 
 export const currentVersion: string = pkg.version
 
