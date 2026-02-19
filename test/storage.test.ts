@@ -76,5 +76,11 @@ describe('initStandalone', () => {
     expect(content).toBe('custom: true')
   })
 
-  it.todo('copies starter packs during initialization')
+  it('copies starter packs during initialization', () => {
+    const standalonePath = path.join(tmpDir, 'Datacore')
+    initStandalone(standalonePath)
+
+    expect(fs.existsSync(path.join(standalonePath, 'packs', 'datacore-starter-v1', 'SKILL.md'))).toBe(true)
+    expect(fs.existsSync(path.join(standalonePath, 'packs', 'fds-principles-v1', 'SKILL.md'))).toBe(true)
+  })
 })

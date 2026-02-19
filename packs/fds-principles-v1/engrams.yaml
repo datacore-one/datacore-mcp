@@ -1,0 +1,120 @@
+engrams:
+  - id: ENG-2026-0101-010
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Users own their data — design systems where data belongs to the individual, not the platform"
+    tags: [ownership, data-sovereignty]
+    domain: ethics.data-sovereignty.ownership
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: fds-principles-v1
+
+  - id: ENG-2026-0101-011
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Data must be protected by default — privacy is not a feature, it is a requirement"
+    tags: [privacy, default, protection]
+    domain: ethics.data-sovereignty.privacy
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: fds-principles-v1
+
+  - id: ENG-2026-0101-012
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Users must control access to their data — provide granular permission management"
+    tags: [control, access, permissions]
+    domain: ethics.data-sovereignty.control
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: fds-principles-v1
+
+  - id: ENG-2026-0101-013
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Require explicit consent before collecting or processing personal data"
+    tags: [consent, explicit, collection]
+    domain: ethics.data-sovereignty.consent
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: fds-principles-v1
+
+  - id: ENG-2026-0101-014
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Users should benefit economically from the value their data creates"
+    tags: [economic, benefit, value, compensation]
+    domain: ethics.data-sovereignty.economics
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: fds-principles-v1
+
+  - id: ENG-2026-0101-015
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Be transparent about data practices — users must understand what happens with their data"
+    tags: [transparency, practices, disclosure]
+    domain: ethics.data-sovereignty.transparency
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: fds-principles-v1
+
+  - id: ENG-2026-0101-016
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Data must be portable — users can export and move their data without lock-in"
+    tags: [portability, export, interoperability]
+    domain: ethics.data-sovereignty.portability
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: fds-principles-v1
+
+  - id: ENG-2026-0101-017
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Handle data responsibly and be accountable for data breaches or misuse"
+    tags: [accountability, responsibility, breach]
+    domain: ethics.data-sovereignty.accountability
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: fds-principles-v1
+
+  - id: ENG-2026-0101-018
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: "Embed ethical principles into system architecture — ethics by design, not afterthought"
+    tags: [ethics, design, architecture, embedded]
+    domain: ethics.data-sovereignty.ethics-by-design
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: fds-principles-v1
+
+  - id: ENG-2026-0101-019
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: "Build systems that interoperate — reduce lock-in through open standards and protocols"
+    tags: [interoperability, open-standards, protocols]
+    domain: ethics.data-sovereignty.interoperability
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: fds-principles-v1

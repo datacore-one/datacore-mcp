@@ -1,0 +1,60 @@
+engrams:
+  - id: ENG-2026-0101-001
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Capture first, organize later — get ideas out of your head immediately"
+    rationale: "Cognitive offloading reduces mental load and prevents loss of fleeting insights"
+    tags: [capture, gtd, inbox]
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: datacore-starter-v1
+
+  - id: ENG-2026-0101-002
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Journal daily — even one sentence creates a searchable record"
+    rationale: "Consistency matters more than volume; journals enable future pattern recognition"
+    tags: [journal, daily, habit]
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: datacore-starter-v1
+
+  - id: ENG-2026-0101-003
+    version: 2
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "When something surprises you, record it as an engram"
+    rationale: "Surprise signals a gap between expectation and reality — prime learning material"
+    tags: [learn, engram, surprise, insight]
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: datacore-starter-v1
+
+  - id: ENG-2026-0101-004
+    version: 2
+    status: active
+    type: procedural
+    scope: global
+    visibility: public
+    statement: "Separate capture from processing — inbox to zero, then route"
+    rationale: "Mixing capture and organization creates decision fatigue and incomplete processing"
+    tags: [gtd, inbox, processing, workflow]
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: datacore-starter-v1
+
+  - id: ENG-2026-0101-005
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: "Knowledge compounds — connecting ideas across time creates exponential returns"
+    rationale: "Isolated notes decay; linked, tagged, and revisited knowledge grows in value"
+    tags: [knowledge, compounding, linking, value]
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    pack: datacore-starter-v1
