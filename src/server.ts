@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
+import { zodToJsonSchema } from 'zod-to-json-schema'
 import { detectStorage, initStandalone, type StorageConfig } from './storage.js'
 import { currentVersion, checkForUpdate } from './version.js'
 import { TOOLS } from './tools/index.js'
@@ -30,7 +31,7 @@ export function createServer(): Server {
     tools: TOOLS.map(t => ({
       name: t.name,
       description: t.description,
-      inputSchema: { type: 'object' as const, properties: {} },  // Simplified for SDK
+      inputSchema: zodToJsonSchema(t.inputSchema),
     })),
   }))
 
@@ -47,21 +48,20 @@ export function createServer(): Server {
   return server
 }
 
-// Args come as Record<string, unknown> from the MCP SDK. Each handler validates its own shape.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP SDK provides untyped args
-type ToolArgs = any
-
 async function routeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-  const a = args as ToolArgs
+  const toolDef = TOOLS.find(t => t.name === name)
+  if (!toolDef) throw new Error(`Unknown tool: ${name}`)
+  const validated = toolDef.inputSchema.parse(args)
+
   switch (name) {
-    case 'datacore.capture': return handleCapture(a, storage)
-    case 'datacore.learn': return handleLearn(a, storage.engramsPath)
-    case 'datacore.inject': return handleInject(a, { engramsPath: storage.engramsPath, packsPath: storage.packsPath })
-    case 'datacore.search': return handleSearch(a, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath })
-    case 'datacore.ingest': return handleIngest(a, { knowledgePath: storage.knowledgePath, engramsPath: storage.engramsPath })
+    case 'datacore.capture': return handleCapture(validated, storage)
+    case 'datacore.learn': return handleLearn(validated, storage.engramsPath)
+    case 'datacore.inject': return handleInject(validated, { engramsPath: storage.engramsPath, packsPath: storage.packsPath })
+    case 'datacore.search': return handleSearch(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath })
+    case 'datacore.ingest': return handleIngest(validated, { knowledgePath: storage.knowledgePath, engramsPath: storage.engramsPath })
     case 'datacore.status': return handleStatus({ ...storage, engramsPath: storage.engramsPath, packsPath: storage.packsPath }, updateAvailable)
-    case 'datacore.discover': return handleDiscover(a, storage.packsPath)
-    case 'datacore.install': return handleInstall(a, storage.packsPath)
+    case 'datacore.discover': return handleDiscover(validated, storage.packsPath)
+    case 'datacore.install': return handleInstall(validated, storage.packsPath)
     default: throw new Error(`Unknown tool: ${name}`)
   }
 }

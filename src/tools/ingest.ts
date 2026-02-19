@@ -23,6 +23,8 @@ export async function handleIngest(
   const fileName = `${timestamp}-${slug}.md`
   const filePath = path.join(paths.knowledgePath, fileName)
 
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+
   const frontmatter = `---\ntitle: "${args.title ?? 'Ingested Note'}"\ncreated: "${new Date().toISOString()}"\ntype: ingested\n---\n\n`
   const tagLine = args.tags?.length ? `\n${args.tags.map(t => `#${t}`).join(' ')}\n` : ''
   fs.writeFileSync(filePath, `${frontmatter}${args.content}\n${tagLine}`)

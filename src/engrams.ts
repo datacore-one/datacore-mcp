@@ -6,19 +6,24 @@ import { EngramSchema, PackManifestSchema, type Engram, type PackManifest } from
 export function loadEngrams(filePath: string): Engram[] {
   if (!fs.existsSync(filePath)) return []
 
-  const raw = yaml.load(fs.readFileSync(filePath, 'utf8')) as any
-  if (!raw?.engrams || !Array.isArray(raw.engrams)) return []
+  try {
+    const raw = yaml.load(fs.readFileSync(filePath, 'utf8')) as any
+    if (!raw?.engrams || !Array.isArray(raw.engrams)) return []
 
-  const valid: Engram[] = []
-  for (const entry of raw.engrams) {
-    const result = EngramSchema.safeParse(entry)
-    if (result.success) {
-      valid.push(result.data)
-    } else {
-      console.warn(`Skipping invalid engram ${entry?.id ?? 'unknown'}:`, result.error.message)
+    const valid: Engram[] = []
+    for (const entry of raw.engrams) {
+      const result = EngramSchema.safeParse(entry)
+      if (result.success) {
+        valid.push(result.data)
+      } else {
+        console.warn(`Skipping invalid engram ${entry?.id ?? 'unknown'}:`, result.error.message)
+      }
     }
+    return valid
+  } catch (err) {
+    console.warn(`Failed to parse engrams file ${filePath}:`, err)
+    return []
   }
-  return valid
 }
 
 export function saveEngrams(filePath: string, engrams: Engram[]): void {
@@ -35,7 +40,11 @@ function parseSkillMdFrontmatter(filePath: string): Record<string, any> {
   const content = fs.readFileSync(filePath, 'utf8')
   const match = content.match(/^---\n([\s\S]*?)\n---/)
   if (!match) throw new Error(`No frontmatter found in ${filePath}`)
-  return yaml.load(match[1]) as Record<string, any>
+  try {
+    return yaml.load(match[1]) as Record<string, any>
+  } catch (err) {
+    throw new Error(`Failed to parse YAML frontmatter in ${filePath}: ${err}`)
+  }
 }
 
 export function loadPack(packDir: string): LoadedPack {

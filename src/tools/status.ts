@@ -1,6 +1,8 @@
 // src/tools/status.ts
 import * as fs from 'fs'
+import * as path from 'path'
 import { loadEngrams } from '../engrams.js'
+import { currentVersion } from '../version.js'
 
 interface StatusPaths {
   engramsPath: string
@@ -32,7 +34,7 @@ export async function handleStatus(
   const packsCount = countDirs(paths.packsPath)
 
   const result: StatusResult = {
-    version: '0.1.0',
+    version: currentVersion,
     mode: paths.mode,
     engrams: engrams.length,
     packs: packsCount,
@@ -53,7 +55,13 @@ export async function handleStatus(
 
 function countFiles(dir: string, ext: string): number {
   if (!fs.existsSync(dir)) return 0
-  return fs.readdirSync(dir).filter(f => f.endsWith(ext)).length
+  let count = 0
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) count += countFiles(fullPath, ext)
+    else if (entry.name.endsWith(ext)) count++
+  }
+  return count
 }
 
 function countDirs(dir: string): number {

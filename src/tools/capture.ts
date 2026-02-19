@@ -27,6 +27,8 @@ function captureJournal(content: string, journalDir: string): CaptureResult {
   const filePath = path.join(journalDir, `${today}.md`)
   const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
 
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+
   if (fs.existsSync(filePath)) {
     const existing = fs.readFileSync(filePath, 'utf8')
     fs.writeFileSync(filePath, `${existing}\n## ${time}\n\n${content}\n`)
@@ -42,6 +44,8 @@ function captureKnowledge(content: string, title: string | undefined, tags: stri
   const slug = (title ?? 'note').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50)
   const fileName = `${timestamp}-${slug}.md`
   const filePath = path.join(knowledgeDir, fileName)
+
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
 
   const frontmatter = `---\ntitle: "${title ?? 'Untitled'}"\ncreated: "${new Date().toISOString()}"\n---\n\n`
   const tagLine = tags?.length ? `\n${tags.map(t => `#${t}`).join(' ')}\n` : ''
