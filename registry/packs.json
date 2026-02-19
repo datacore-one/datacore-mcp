@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "datacore-starter-v1",
+      "name": "Datacore Methodology",
+      "description": "Core knowledge management principles — capture, journal, learn, compound",
+      "version": "1.0.0",
+      "author": "Datacore",
+      "tags": ["methodology", "gtd", "knowledge-management"],
+      "download_url": "",
+      "engram_count": 5,
+      "free": true
+    },
+    {
+      "id": "fds-principles-v1",
+      "name": "FDS Principles",
+      "description": "Fair Data Society's 10 principles for ethical data handling",
+      "version": "1.0.0",
+      "author": "Fair Data Society",
+      "tags": ["ethics", "data-sovereignty", "privacy", "consent"],
+      "download_url": "",
+      "engram_count": 10,
+      "free": true
+    }
+  ]
+}
