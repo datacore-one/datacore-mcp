@@ -71,4 +71,23 @@ export const TOOLS = [
       source: z.string().describe('Pack source: local path or pack ID from registry'),
     }),
   },
+  {
+    name: 'datacore.modules.list',
+    description: 'List installed modules with scope, version, and capability counts',
+    inputSchema: z.object({}),
+  },
+  {
+    name: 'datacore.modules.info',
+    description: 'Get detailed info about a specific module: manifest, tools, skills, agents, engrams',
+    inputSchema: z.object({
+      module: z.string().describe('Module name (e.g., "gtd", "slides", "crm")'),
+    }),
+  },
+  {
+    name: 'datacore.modules.health',
+    description: 'Check module health: missing files, env vars, data separation issues',
+    inputSchema: z.object({
+      module: z.string().optional().describe('Module name (omit for all modules)'),
+    }),
+  },
 ] as const
