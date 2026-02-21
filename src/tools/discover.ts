@@ -27,6 +27,12 @@ export function handleDiscover(
   args: { query?: string; tags?: string[] },
   packsDir: string,
 ): DiscoverResult {
+  // Check for bundled packs shipped with the npm package
+  const bundledDir = path.join(
+    path.dirname(new URL(import.meta.url).pathname),
+    '..', 'packs',
+  )
+
   let packs: DiscoverPack[] = registry.packs.map((p: RegistryPack) => {
     const localDir = path.join(packsDir, p.id)
     const installed = fs.existsSync(path.join(localDir, 'SKILL.md'))
@@ -38,12 +44,13 @@ export function handleDiscover(
         installedVersion = match?.[1]
       } catch {}
     }
+    const bundled = fs.existsSync(path.join(bundledDir, p.id, 'SKILL.md'))
     return {
       ...p,
       installed,
       installed_version: installedVersion,
       upgradeable: installed && installedVersion !== p.version,
-      can_install: !!p.download_url,
+      can_install: !!p.download_url || bundled,
     }
   })
 
