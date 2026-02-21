@@ -28,6 +28,11 @@ export async function handleInstall(args: InstallArgs, packsDir: string): Promis
     const downloaded = await downloadPack(srcDir)
     if (downloaded.error) return { success: false, error: downloaded.error }
     srcDir = downloaded.path!
+  } else if (!srcDir.includes('/') && !srcDir.includes('\\')) {
+    // Looks like a pack ID — resolve from registry
+    const resolved = resolvePackId(srcDir, packsDir)
+    if (resolved.error) return { success: false, error: resolved.error }
+    srcDir = resolved.path!
   }
 
   // Validate source has SKILL.md
@@ -119,4 +124,36 @@ function findPackRoot(dir: string): string | null {
     }
   }
   return null
+}
+
+function resolvePackId(packId: string, packsDir: string): { path?: string; error?: string } {
+  const registryPack = (registry.packs as Array<{ id: string; download_url: string }>)
+    .find(p => p.id === packId)
+
+  if (!registryPack) {
+    return { error: `Pack "${packId}" not found in registry. Use datacore.packs.discover to browse available packs.` }
+  }
+
+  // If registry has a download URL, redirect to URL install
+  if (registryPack.download_url) {
+    return { error: `Pack "${packId}" must be installed via URL: ${registryPack.download_url}` }
+  }
+
+  // Bundled pack — resolve from the packs/ directory next to dist/
+  const bundledDir = path.join(
+    path.dirname(new URL(import.meta.url).pathname),
+    '..', 'packs', packId,
+  )
+
+  if (fs.existsSync(path.join(bundledDir, 'SKILL.md'))) {
+    return { path: bundledDir }
+  }
+
+  // Already installed locally?
+  const localDir = path.join(packsDir, packId)
+  if (fs.existsSync(path.join(localDir, 'SKILL.md'))) {
+    return { path: localDir }
+  }
+
+  return { error: `Pack "${packId}" is registered but not available locally. It may need to be downloaded manually.` }
 }

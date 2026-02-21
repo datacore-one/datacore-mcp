@@ -39,7 +39,13 @@ export async function handleInject(
   const totalCount = result.directives.length + result.consider.length
 
   if (totalCount === 0) {
-    return { text: '', count: 0, tokens_used: 0 }
+    return {
+      text: '', count: 0, tokens_used: 0,
+      _hints: buildHints({
+        next: 'No engrams matched this task. Use datacore.recall to search all sources, or datacore.learn to record new knowledge.',
+        related: ['datacore.recall', 'datacore.learn'],
+      }),
+    }
   }
 
   const lines: string[] = []

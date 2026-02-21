@@ -118,7 +118,7 @@ async function routeTool(name: string, args: Record<string, unknown>): Promise<u
       case 'datacore.ingest': result = await handleIngest(validated, { knowledgePath: storage.knowledgePath, engramsPath: storage.engramsPath }); break
       case 'datacore.status': result = await handleStatus({ ...storage, engramsPath: storage.engramsPath, packsPath: storage.packsPath }, updateAvailable); break
       case 'datacore.forget': result = await handleForget(validated, storage.engramsPath); break
-      case 'datacore.feedback': result = await handleFeedback(validated, storage.engramsPath); break
+      case 'datacore.feedback': result = await handleFeedback(validated, storage.engramsPath, storage.packsPath); break
       case 'datacore.session.start': result = await handleSessionStart(validated, storage, datacortexBridge); break
       case 'datacore.session.end': result = await handleSessionEnd(validated, storage); break
       case 'datacore.recall': result = await handleRecall(validated, { engramsPath: storage.engramsPath, journalPath: storage.journalPath, knowledgePath: storage.knowledgePath }, datacortexBridge); break

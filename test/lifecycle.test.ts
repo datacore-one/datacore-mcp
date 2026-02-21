@@ -57,6 +57,7 @@ describe('learn -> inject -> feedback lifecycle', () => {
     const fbResult = await handleFeedback(
       { engram_id: engramId, signal: 'positive' },
       engramsPath,
+      packsDir,
     )
     expect(fbResult.mode).toBe('single')
     expect((fbResult as any).success).toBe(true)
@@ -100,9 +101,9 @@ describe('learn -> inject -> feedback lifecycle', () => {
 
     const engramId = learnResult.engram.id
 
-    await handleFeedback({ engram_id: engramId, signal: 'positive' }, engramsPath)
-    await handleFeedback({ engram_id: engramId, signal: 'positive' }, engramsPath)
-    await handleFeedback({ engram_id: engramId, signal: 'negative' }, engramsPath)
+    await handleFeedback({ engram_id: engramId, signal: 'positive' }, engramsPath, packsDir)
+    await handleFeedback({ engram_id: engramId, signal: 'positive' }, engramsPath, packsDir)
+    await handleFeedback({ engram_id: engramId, signal: 'negative' }, engramsPath, packsDir)
 
     const final = loadEngrams(engramsPath)
     const engram = final.find(e => e.id === engramId)!

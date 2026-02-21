@@ -1,5 +1,8 @@
 // src/tools/feedback.ts
-import { loadEngrams } from '../engrams.js'
+// Supports feedback on ALL engrams — personal and pack engrams alike.
+// Pack engram feedback is written back to the pack's own engrams.yaml.
+import * as path from 'path'
+import { loadEngrams, loadAllPacks, type LoadedPack } from '../engrams.js'
 import { atomicWriteYaml } from './inject-tool.js'
 import { buildHints } from '../hints.js'
 
@@ -17,6 +20,7 @@ interface SingleFeedbackResult {
   success: boolean
   engram_id: string
   signal: string
+  source?: 'personal' | 'pack'
   feedback_signals?: { positive: number; negative: number; neutral: number }
   error?: string
   _hints?: ReturnType<typeof buildHints>
@@ -24,22 +28,54 @@ interface SingleFeedbackResult {
 
 interface BatchFeedbackResult {
   mode: 'batch'
-  results: Array<{ engram_id: string; signal: string; success: boolean; error?: string }>
+  results: Array<{ engram_id: string; signal: string; success: boolean; source?: 'personal' | 'pack'; error?: string }>
   summary: { positive: number; negative: number; neutral: number }
   _hints?: ReturnType<typeof buildHints>
+}
+
+// Locate an engram across personal + all packs
+interface FoundEngram {
+  engram: import('../schemas/engram.js').Engram
+  source: 'personal' | 'pack'
+  // For personal: allEngrams array + engramsPath
+  personalEngrams?: import('../schemas/engram.js').Engram[]
+  // For pack: the pack's engrams array + pack engrams.yaml path
+  packEngrams?: import('../schemas/engram.js').Engram[]
+  packEngramsPath?: string
+}
+
+function findEngram(engramId: string, engramsPath: string, packsPath: string): FoundEngram | null {
+  // Check personal first
+  const personal = loadEngrams(engramsPath)
+  const found = personal.find(e => e.id === engramId)
+  if (found) return { engram: found, source: 'personal', personalEngrams: personal }
+
+  // Check packs
+  const packs = loadAllPacks(packsPath)
+  for (const pack of packs) {
+    const packEngram = pack.engrams.find(e => e.id === engramId)
+    if (packEngram) {
+      const packId = pack.manifest['x-datacore']?.id
+      const packEngramsPath = packId ? path.join(packsPath, packId, 'engrams.yaml') : undefined
+      return { engram: packEngram, source: 'pack', packEngrams: pack.engrams, packEngramsPath }
+    }
+  }
+
+  return null
 }
 
 export async function handleFeedback(
   args: FeedbackArgs,
   engramsPath: string,
+  packsPath?: string,
 ): Promise<SingleFeedbackResult | BatchFeedbackResult> {
-  // Batch mode
+  const pPath = packsPath ?? path.join(path.dirname(engramsPath), 'packs')
+
   if (args.signals && args.signals.length > 0) {
-    return handleBatchFeedback(args.signals, engramsPath)
+    return handleBatchFeedback(args.signals, engramsPath, pPath)
   }
 
-  // Single mode (backward compatible)
-  return handleSingleFeedback(args.engram_id!, args.signal!, args.comment, engramsPath)
+  return handleSingleFeedback(args.engram_id!, args.signal!, args.comment, engramsPath, pPath)
 }
 
 async function handleSingleFeedback(
@@ -47,11 +83,11 @@ async function handleSingleFeedback(
   signal: Signal,
   comment: string | undefined,
   engramsPath: string,
+  packsPath: string,
 ): Promise<SingleFeedbackResult> {
-  const engrams = loadEngrams(engramsPath)
-  const engram = engrams.find(e => e.id === engram_id)
+  const found = findEngram(engram_id, engramsPath, packsPath)
 
-  if (!engram) {
+  if (!found) {
     return {
       mode: 'single',
       success: false,
@@ -66,38 +102,70 @@ async function handleSingleFeedback(
   }
 
   const today = new Date().toISOString().split('T')[0]
-
-  if (!engram.feedback_signals) {
-    engram.feedback_signals = { positive: 0, negative: 0, neutral: 0 }
+  if (!found.engram.feedback_signals) {
+    found.engram.feedback_signals = { positive: 0, negative: 0, neutral: 0 }
   }
+  found.engram.feedback_signals[signal] += 1
+  found.engram.activation.last_accessed = today
 
-  engram.feedback_signals[signal] += 1
-  engram.activation.last_accessed = today
-
-  atomicWriteYaml(engramsPath, { engrams })
+  // Write back to the correct file
+  if (found.source === 'personal' && found.personalEngrams) {
+    atomicWriteYaml(engramsPath, { engrams: found.personalEngrams })
+  } else if (found.source === 'pack' && found.packEngrams && found.packEngramsPath) {
+    atomicWriteYaml(found.packEngramsPath, { engrams: found.packEngrams })
+  }
 
   return {
     mode: 'single',
     success: true,
     engram_id,
     signal,
-    feedback_signals: { ...engram.feedback_signals },
+    source: found.source,
+    feedback_signals: { ...found.engram.feedback_signals },
   }
 }
 
 async function handleBatchFeedback(
   signals: Array<{ engram_id: string; signal: Signal }>,
   engramsPath: string,
+  packsPath: string,
 ): Promise<BatchFeedbackResult> {
-  const engrams = loadEngrams(engramsPath)
   const today = new Date().toISOString().split('T')[0]
-  const results: Array<{ engram_id: string; signal: string; success: boolean; error?: string }> = []
+  const results: Array<{ engram_id: string; signal: string; success: boolean; source?: 'personal' | 'pack'; error?: string }> = []
   const summary = { positive: 0, negative: 0, neutral: 0 }
-  let changed = false
+
+  // Load all sources once upfront to avoid reloading on each iteration
+  const personal = loadEngrams(engramsPath)
+  const packs = loadAllPacks(packsPath)
+  let personalDirty = false
+  const dirtyPackFiles = new Map<string, import('../schemas/engram.js').Engram[]>()
 
   for (const { engram_id, signal } of signals) {
-    const engram = engrams.find(e => e.id === engram_id)
-    if (!engram) {
+    // Search personal engrams first
+    let engram = personal.find(e => e.id === engram_id)
+    let source: 'personal' | 'pack' | undefined
+
+    if (engram) {
+      source = 'personal'
+    } else {
+      // Search packs
+      for (const pack of packs) {
+        engram = pack.engrams.find(e => e.id === engram_id)
+        if (engram) {
+          source = 'pack'
+          const packId = pack.manifest['x-datacore']?.id
+          if (packId) {
+            dirtyPackFiles.set(
+              path.join(packsPath, packId, 'engrams.yaml'),
+              pack.engrams,
+            )
+          }
+          break
+        }
+      }
+    }
+
+    if (!engram || !source) {
       results.push({ engram_id, signal, success: false, error: `Engram ${engram_id} not found` })
       continue
     }
@@ -105,16 +173,20 @@ async function handleBatchFeedback(
     if (!engram.feedback_signals) {
       engram.feedback_signals = { positive: 0, negative: 0, neutral: 0 }
     }
-
     engram.feedback_signals[signal] += 1
     engram.activation.last_accessed = today
     summary[signal]++
-    changed = true
-    results.push({ engram_id, signal, success: true })
+
+    if (source === 'personal') personalDirty = true
+    results.push({ engram_id, signal, success: true, source })
   }
 
-  if (changed) {
-    atomicWriteYaml(engramsPath, { engrams })
+  // Write dirty files
+  if (personalDirty) {
+    atomicWriteYaml(engramsPath, { engrams: personal })
+  }
+  for (const [filePath, engrams] of dirtyPackFiles) {
+    atomicWriteYaml(filePath, { engrams })
   }
 
   return {

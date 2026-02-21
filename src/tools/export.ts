@@ -85,6 +85,14 @@ export async function handleExport(
     }
   }
 
+  // Check for existing pack
+  if (fs.existsSync(packDir)) {
+    return {
+      success: false,
+      error: `Pack directory already exists at ${packDir}. Remove it first or use a different name.`,
+    }
+  }
+
   // Write pack
   fs.mkdirSync(packDir, { recursive: true })
 
@@ -109,7 +117,7 @@ Exported ${selected.length} engrams.
 `
   fs.writeFileSync(path.join(packDir, 'SKILL.md'), skillContent)
 
-  // engrams.yaml — strip personal fields
+  // engrams.yaml — strip personal fields, preserve knowledge content
   const exportEngrams = selected.map(e => ({
     id: e.id,
     version: e.version,
@@ -118,6 +126,7 @@ Exported ${selected.length} engrams.
     visibility: e.visibility,
     statement: e.statement,
     rationale: e.rationale,
+    contraindications: e.contraindications,
     tags: e.tags,
     domain: e.domain,
     status: 'active',

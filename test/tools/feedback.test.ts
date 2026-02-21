@@ -39,10 +39,11 @@ const ENGRAM_YAML = `engrams:
 describe('datacore.feedback', () => {
   const tmpDir = path.join(os.tmpdir(), 'feedback-test-' + Date.now())
   const engramsPath = path.join(tmpDir, 'engrams.yaml')
+  const packsPath = path.join(tmpDir, 'packs')
 
   beforeEach(() => {
     resetConfigCache()
-    fs.mkdirSync(tmpDir, { recursive: true })
+    fs.mkdirSync(packsPath, { recursive: true })
     fs.writeFileSync(engramsPath, ENGRAM_YAML)
     loadConfig(tmpDir, 'core')
   })
@@ -56,6 +57,7 @@ describe('datacore.feedback', () => {
       const result = await handleFeedback(
         { engram_id: 'ENG-2026-0219-001', signal: 'positive' },
         engramsPath,
+        packsPath,
       )
       expect(result.mode).toBe('single')
       expect((result as any).success).toBe(true)
@@ -66,6 +68,7 @@ describe('datacore.feedback', () => {
       const result = await handleFeedback(
         { engram_id: 'ENG-2026-0219-001', signal: 'negative' },
         engramsPath,
+        packsPath,
       )
       expect((result as any).success).toBe(true)
       expect((result as any).feedback_signals?.negative).toBe(1)
@@ -75,6 +78,7 @@ describe('datacore.feedback', () => {
       const result = await handleFeedback(
         { engram_id: 'ENG-NONEXISTENT', signal: 'positive' },
         engramsPath,
+        packsPath,
       )
       expect(result.mode).toBe('single')
       expect((result as any).success).toBe(false)
@@ -85,6 +89,7 @@ describe('datacore.feedback', () => {
       await handleFeedback(
         { engram_id: 'ENG-2026-0219-001', signal: 'positive' },
         engramsPath,
+        packsPath,
       )
       const engrams = loadEngrams(engramsPath)
       expect(engrams[0].feedback_signals?.positive).toBe(1)
@@ -94,6 +99,7 @@ describe('datacore.feedback', () => {
       await handleFeedback(
         { engram_id: 'ENG-2026-0219-001', signal: 'neutral' },
         engramsPath,
+        packsPath,
       )
       const engrams = loadEngrams(engramsPath)
       const today = new Date().toISOString().split('T')[0]
@@ -104,6 +110,7 @@ describe('datacore.feedback', () => {
       const result = await handleFeedback(
         { engram_id: 'ENG-NONEXISTENT', signal: 'positive' },
         engramsPath,
+        packsPath,
       )
       expect((result as any)._hints?.next).toContain('Engram not found')
     })
@@ -116,7 +123,7 @@ describe('datacore.feedback', () => {
           { engram_id: 'ENG-2026-0219-001', signal: 'positive' },
           { engram_id: 'ENG-2026-0219-002', signal: 'negative' },
         ],
-      }, engramsPath)
+      }, engramsPath, packsPath)
 
       expect(result.mode).toBe('batch')
       const batch = result as any
@@ -133,7 +140,7 @@ describe('datacore.feedback', () => {
           { engram_id: 'ENG-2026-0219-001', signal: 'positive' },
           { engram_id: 'ENG-NONEXISTENT', signal: 'negative' },
         ],
-      }, engramsPath)
+      }, engramsPath, packsPath)
 
       const batch = result as any
       expect(batch.results[0].success).toBe(true)
@@ -147,7 +154,7 @@ describe('datacore.feedback', () => {
           { engram_id: 'ENG-2026-0219-001', signal: 'positive' },
           { engram_id: 'ENG-2026-0219-002', signal: 'positive' },
         ],
-      }, engramsPath)
+      }, engramsPath, packsPath)
 
       const engrams = loadEngrams(engramsPath)
       expect(engrams[0].feedback_signals?.positive).toBe(1)
@@ -157,7 +164,7 @@ describe('datacore.feedback', () => {
     it('includes hints in batch result', async () => {
       const result = await handleFeedback({
         signals: [{ engram_id: 'ENG-2026-0219-001', signal: 'positive' }],
-      }, engramsPath)
+      }, engramsPath, packsPath)
       expect((result as any)._hints?.next).toContain('Batch feedback recorded')
     })
   })

@@ -32,14 +32,14 @@ export async function handleForget(args: ForgetArgs, engramsPath: string): Promi
 
   if (args.search) {
     const searchLower = args.search.toLowerCase()
-    const matches = engrams
+    const allMatches = engrams
       .filter(e => e.status !== 'retired')
       .filter(e =>
         e.statement.toLowerCase().includes(searchLower) ||
         e.id.toLowerCase().includes(searchLower) ||
         e.tags.some(t => t.toLowerCase().includes(searchLower))
       )
-      .slice(0, 10)
+    const matches = allMatches.slice(0, 100)
 
     if (matches.length === 0) {
       return { success: false, error: `No active engrams matching "${args.search}"` }
@@ -51,10 +51,12 @@ export async function handleForget(args: ForgetArgs, engramsPath: string): Promi
       saveEngrams(engramsPath, engrams)
       return { success: true, retired: { id: engram.id, statement: engram.statement } }
     }
+    const truncated = allMatches.length > 100
     return {
       success: false,
       matches: matches.map(e => ({ id: e.id, statement: e.statement })),
-      error: `Multiple matches found. Specify an exact ID to retire.`,
+      total_matches: allMatches.length,
+      error: `${allMatches.length} matches found${truncated ? ' (showing first 100)' : ''}. Specify an exact ID to retire.`,
     }
   }
 

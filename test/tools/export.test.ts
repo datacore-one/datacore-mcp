@@ -105,4 +105,37 @@ describe('datacore.packs.export', () => {
     ) as { engrams: unknown[] }
     expect(exported.engrams).toHaveLength(1)
   })
+
+  it('errors when pack directory already exists', async () => {
+    writeEngrams([makeEngram()])
+    // Create the pack dir first
+    const packDir = path.join(packsPath, 'test-pack')
+    fs.mkdirSync(packDir, { recursive: true })
+    fs.writeFileSync(path.join(packDir, 'SKILL.md'), 'existing')
+
+    const result = await handleExport(
+      { name: 'Test Pack', description: 'A test', confirm: true },
+      { engramsPath, packsPath },
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('already exists')
+  })
+
+  it('preserves contraindications in exported engrams', async () => {
+    writeEngrams([makeEngram({
+      contraindications: ['Not for production databases', 'Skip for hotfixes'],
+    })])
+    const result = await handleExport(
+      { name: 'Contra Pack', description: 'Test', confirm: true },
+      { engramsPath, packsPath },
+    )
+    expect(result.success).toBe(true)
+    const exported = yaml.load(
+      fs.readFileSync(path.join(result.pack_path!, 'engrams.yaml'), 'utf8'),
+    ) as { engrams: Array<{ contraindications?: string[] }> }
+    expect(exported.engrams[0].contraindications).toEqual([
+      'Not for production databases',
+      'Skip for hotfixes',
+    ])
+  })
 })
