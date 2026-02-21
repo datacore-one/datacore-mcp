@@ -1,6 +1,6 @@
 // test/version.test.ts
 import { describe, it, expect, vi } from 'vitest'
-import { checkForUpdate } from '../src/version.js'
+import { checkForUpdate, currentVersion } from '../src/version.js'
 
 describe('checkForUpdate', () => {
   it('returns null when fetch fails (offline)', async () => {
@@ -13,7 +13,7 @@ describe('checkForUpdate', () => {
   it('returns null when already on latest version', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '1.0.0' }),
+      json: async () => ({ version: currentVersion }),
     }))
     const result = await checkForUpdate()
     expect(result).toBeNull()
