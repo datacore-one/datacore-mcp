@@ -1,6 +1,6 @@
 # Datacore MCP Server
 
-*Last updated: 2026-02-21*
+*Last updated: 2026-02-21 (inject scoring: scope filtering, feedback/consolidated boosts)*
 
 ## Purpose
 
@@ -18,7 +18,7 @@ The server has two tool layers: **core tools** (hardcoded, always available) and
 | `modules.ts` | Module discovery, dynamic tool loading, namespacing |
 | `storage.ts` | Storage mode detection (full Datacore install vs standalone) |
 | `engrams.ts` | Learning system - engram CRUD and injection |
-| `inject.ts` | Context injection engine - semantic matching of engrams |
+| `inject.ts` | Context injection engine - scope filtering, feedback/consolidated scoring |
 | `tools/` | Core tool handlers (capture, learn, search, etc.) |
 
 ### Data Flow
@@ -54,6 +54,7 @@ Dual-gating: tools must be declared in `module.yaml` AND exported from `tools/in
 - **Module tool files must be plain JS**: The MCP server dynamically imports module tools at runtime. TypeScript files will not load unless pre-compiled.
 - **Zod version alignment**: Module tools import Zod for schema definitions. The Zod version in the module must be compatible with the MCP server's version.
 - **Storage detection**: `storage.ts` tries `~/Data` first, falls back to CWD. If neither has `.datacore/`, runs in standalone mode with no module tools.
+- **Parameter passthrough in inject pipeline**: When adding parameters to `selectEngrams()`, they must also be passed through `inject-tool.ts` (tool handler) and `scoreEngram()`. Missing any layer silently drops the parameter.
 
 ## Codebase
 

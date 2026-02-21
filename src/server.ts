@@ -181,9 +181,10 @@ export async function runStdio(): Promise<void> {
   await initStorage()
 
   checkForUpdate().then(v => { updateAvailable = v })
+  // Check daily — MCP servers can run for months
   const updateInterval = setInterval(() => {
     checkForUpdate().then(v => { updateAvailable = v })
-  }, 3600_000)
+  }, 24 * 3600_000)
   updateInterval.unref()
 
   const server = createServer()
