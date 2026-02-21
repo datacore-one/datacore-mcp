@@ -12,27 +12,31 @@ Not a RAG system. Not a vector database you have to manage. Just an MCP server t
 
 ## Quick Start
 
-Add to your Claude Desktop config:
+Install globally:
+
+```bash
+npm install -g @datacore-one/mcp
+```
+
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
     "datacore": {
-      "command": "npx",
-      "args": ["@datacore-one/mcp"]
+      "command": "datacore-mcp"
     }
   }
 }
 ```
 
-Or for Claude Code, add to `.mcp.json`:
+Or for Claude Code, add to `.mcp.json` in your project root:
 
 ```json
 {
   "mcpServers": {
     "datacore": {
-      "command": "npx",
-      "args": ["@datacore-one/mcp"]
+      "command": "datacore-mcp"
     }
   }
 }
@@ -135,7 +139,7 @@ Bundled starter packs are installed automatically on first run.
 For remote or multi-client setups:
 
 ```bash
-DATACORE_HTTP_PORT=8080 npx @datacore-one/mcp --http
+DATACORE_HTTP_PORT=8080 datacore-mcp --http
 ```
 
 Health check: `GET /health`
