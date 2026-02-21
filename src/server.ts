@@ -7,6 +7,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { detectStorage, initCore, type StorageConfig } from './storage.js'
+import { loadConfig } from './config.js'
 import { currentVersion, checkForUpdate } from './version.js'
 import { TOOLS } from './tools/index.js'
 import { handleCapture } from './tools/capture.js'
@@ -29,8 +30,13 @@ import { handleModulesInfo } from './tools/modules-info.js'
 import { handleModulesHealth } from './tools/modules-health.js'
 import { handleForget } from './tools/forget.js'
 import { handleFeedback } from './tools/feedback.js'
+import { handleSessionStart } from './tools/session-start.js'
+import { handleSessionEnd } from './tools/session-end.js'
+import { handleRecall } from './tools/recall.js'
+import { handlePromote } from './tools/promote.js'
 import { logger } from './logger.js'
 import { registerResources, notifyEngramsChanged } from './resources.js'
+import { registerPrompts } from './prompts.js'
 import { DatacortexBridge } from './datacortex.js'
 
 let storage: StorageConfig
@@ -46,23 +52,29 @@ let datacortexBridge: DatacortexBridge | null = null
 export function createServer(): Server {
   const server = new Server(
     { name: 'datacore-mcp', version: currentVersion },
-    { capabilities: { tools: {}, logging: {}, resources: { subscribe: true } } },
+    { capabilities: { tools: {}, logging: {}, resources: { subscribe: true }, prompts: {} } },
   )
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      ...TOOLS.map(t => ({
-        name: t.name,
-        description: t.description,
-        inputSchema: zodToJsonSchema(t.inputSchema),
-      })),
-      ...moduleTools.map(t => ({
-        name: t.fullName,
-        description: t.definition.description,
-        inputSchema: zodToJsonSchema(t.definition.inputSchema),
-      })),
-    ],
-  }))
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    // Hide modules.* tools in core mode — they require a full installation
+    const coreTools = storage.mode === 'core'
+      ? TOOLS.filter(t => !t.name.startsWith('datacore.modules.'))
+      : TOOLS
+    return {
+      tools: [
+        ...coreTools.map(t => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: zodToJsonSchema(t.inputSchema),
+        })),
+        ...moduleTools.map(t => ({
+          name: t.fullName,
+          description: t.definition.description,
+          inputSchema: zodToJsonSchema(t.definition.inputSchema),
+        })),
+      ],
+    }
+  })
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params
@@ -84,13 +96,14 @@ export function createServer(): Server {
 
   logger.setServer(server)
   registerResources(server, storage)
+  registerPrompts(server)
   serverRef = server
   return server
 }
 
 // --- Tool routing ---
 
-const ENGRAM_MUTATING_TOOLS = new Set(['datacore.learn', 'datacore.forget', 'datacore.feedback'])
+const ENGRAM_MUTATING_TOOLS = new Set(['datacore.learn', 'datacore.forget', 'datacore.feedback', 'datacore.session.end', 'datacore.promote'])
 
 async function routeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   const coreTool = TOOLS.find(t => t.name === name)
@@ -105,7 +118,11 @@ async function routeTool(name: string, args: Record<string, unknown>): Promise<u
       case 'datacore.ingest': result = await handleIngest(validated, { knowledgePath: storage.knowledgePath, engramsPath: storage.engramsPath }); break
       case 'datacore.status': result = await handleStatus({ ...storage, engramsPath: storage.engramsPath, packsPath: storage.packsPath }, updateAvailable); break
       case 'datacore.forget': result = await handleForget(validated, storage.engramsPath); break
-      case 'datacore.feedback': result = await handleFeedback(validated as { engram_id: string; signal: 'positive' | 'negative' | 'neutral'; comment?: string }, storage.engramsPath); break
+      case 'datacore.feedback': result = await handleFeedback(validated, storage.engramsPath); break
+      case 'datacore.session.start': result = await handleSessionStart(validated, storage, datacortexBridge); break
+      case 'datacore.session.end': result = await handleSessionEnd(validated, storage); break
+      case 'datacore.recall': result = await handleRecall(validated, { engramsPath: storage.engramsPath, journalPath: storage.journalPath, knowledgePath: storage.knowledgePath }, datacortexBridge); break
+      case 'datacore.promote': result = await handlePromote(validated, storage.engramsPath); break
       case 'datacore.packs.discover': result = handleDiscover(validated, storage.packsPath); break
       case 'datacore.packs.install': result = await handleInstall(validated, storage.packsPath); break
       case 'datacore.packs.export': result = await handleExport(validated as any, { engramsPath: storage.engramsPath, packsPath: storage.packsPath }); break
@@ -168,6 +185,7 @@ async function initStorage(): Promise<void> {
     const result = initCore(storage.basePath)
     isFirstRun = result.isFirstRun
   }
+  loadConfig(storage.basePath, storage.mode)
   if (storage.mode === 'full') {
     discoveredModules = discoverModules(storage)
     moduleTools = await loadModuleTools(discoveredModules, storage)

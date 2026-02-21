@@ -1,6 +1,7 @@
 // src/tools/discover.ts
 import * as fs from 'fs'
 import * as path from 'path'
+import { getConfig } from '../config.js'
 import registry from '../../registry/packs.json'
 
 interface RegistryPack {
@@ -18,6 +19,8 @@ interface DiscoverPack extends RegistryPack {
 
 interface DiscoverResult {
   packs: DiscoverPack[]
+  auto_installable?: string[]
+  auto_upgradeable?: string[]
 }
 
 export function handleDiscover(
@@ -58,5 +61,21 @@ export function handleDiscover(
     packs = packs.filter(p => p.tags.some(t => filterTags.has(t.toLowerCase())))
   }
 
-  return { packs }
+  // Check trusted publishers for auto-install/upgrade suggestions
+  const trusted = new Set(getConfig().packs.trusted_publishers)
+  const result: DiscoverResult = { packs }
+
+  if (trusted.size > 0) {
+    const autoInstallable = packs
+      .filter(p => trusted.has(p.author) && !p.installed && p.can_install)
+      .map(p => p.id)
+    const autoUpgradeable = packs
+      .filter(p => trusted.has(p.author) && p.upgradeable)
+      .map(p => p.id)
+
+    if (autoInstallable.length > 0) result.auto_installable = autoInstallable
+    if (autoUpgradeable.length > 0) result.auto_upgradeable = autoUpgradeable
+  }
+
+  return result
 }

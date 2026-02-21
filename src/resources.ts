@@ -34,6 +34,12 @@ export function registerResources(server: Server, storage: StorageConfig): void 
         description: "Today's journal entry",
         mimeType: 'text/markdown',
       },
+      {
+        uri: 'datacore://guide',
+        name: 'Datacore Agent Guide',
+        description: 'Workflow guide for AI agents: session lifecycle, engram lifecycle, tool reference',
+        mimeType: 'text/markdown',
+      },
     ],
   }))
 
@@ -84,6 +90,17 @@ export function registerResources(server: Server, storage: StorageConfig): void 
       }
     }
 
+    // Static: datacore://guide
+    if (uri === 'datacore://guide') {
+      return {
+        contents: [{
+          uri,
+          mimeType: 'text/markdown',
+          text: AGENT_GUIDE,
+        }],
+      }
+    }
+
     // Static or template: datacore://journal/today or datacore://journal/{date}
     const journalMatch = uri.match(/^datacore:\/\/journal\/(.+)$/)
     if (journalMatch) {
@@ -115,6 +132,41 @@ export function registerResources(server: Server, storage: StorageConfig): void 
     throw new Error(`Unknown resource: ${uri}`)
   })
 }
+
+const AGENT_GUIDE = `# Datacore Agent Guide
+
+## Session Lifecycle
+1. datacore.session.start — Get relevant engrams + today's context
+2. Work on task, use datacore.recall or datacore.search as needed
+3. datacore.feedback — Rate which injected engrams helped (batch supported)
+4. datacore.session.end — Capture summary + engram suggestions
+
+## Engram Lifecycle
+- datacore.learn creates candidate engrams (or active if auto_promote enabled)
+- datacore.promote activates candidates so they appear in inject results
+- datacore.feedback with positive signals strengthens injection priority
+- datacore.forget retires engrams permanently
+- Unused engrams naturally decay over time
+
+## Quick Reference
+| Tool | Purpose |
+|------|---------|
+| session.start | Begin session with context injection |
+| session.end | End session with journal + engrams |
+| learn | Create engram from knowledge statement |
+| promote | Activate candidate engrams |
+| inject | Get relevant engrams for specific task |
+| recall | Search all sources (engrams + journal + knowledge) |
+| capture | Write journal entry or knowledge note |
+| search | Keyword/semantic file search |
+| ingest | Ingest text + extract engram suggestions |
+| feedback | Rate engrams (single or batch) |
+| forget | Retire an engram |
+| status | System health + actionable recommendations |
+| packs.discover | Browse available engram packs |
+| packs.install | Install or upgrade a pack |
+| packs.export | Export engrams as shareable pack |
+`
 
 export function notifyEngramsChanged(server: Server): void {
   try {

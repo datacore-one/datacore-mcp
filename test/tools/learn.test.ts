@@ -5,6 +5,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { handleLearn, generateEngramId } from '../../src/tools/learn.js'
 import { loadEngrams } from '../../src/engrams.js'
+import { loadConfig, resetConfigCache } from '../../src/config.js'
 import type { Engram } from '../../src/schemas/engram.js'
 
 describe('datacore.learn', () => {
@@ -12,10 +13,15 @@ describe('datacore.learn', () => {
   const engramsPath = path.join(tmpDir, 'engrams.yaml')
 
   beforeEach(() => {
+    resetConfigCache()
     fs.mkdirSync(tmpDir, { recursive: true })
     fs.writeFileSync(engramsPath, 'engrams: []\n')
+    loadConfig(tmpDir, 'core')
   })
-  afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }))
+  afterEach(() => {
+    resetConfigCache()
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
 
   it('creates an engram from a statement', async () => {
     const result = await handleLearn(
@@ -44,6 +50,37 @@ describe('datacore.learn', () => {
     await handleLearn({ statement: 'Second' }, engramsPath)
     const engrams = loadEngrams(engramsPath)
     expect(engrams).toHaveLength(2)
+  })
+
+  it('creates candidate with RS=0.5, SS=0.3 by default', async () => {
+    const result = await handleLearn({ statement: 'Test' }, engramsPath)
+    expect(result.engram.status).toBe('candidate')
+    expect(result.engram.activation.retrieval_strength).toBe(0.5)
+    expect(result.engram.activation.storage_strength).toBe(0.3)
+  })
+
+  it('creates active with RS=0.7, SS=1.0 when auto_promote is true', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'config.yaml'), 'engrams:\n  auto_promote: true\n')
+    loadConfig(tmpDir, 'core')
+
+    const result = await handleLearn({ statement: 'Auto-promoted' }, engramsPath)
+    expect(result.engram.status).toBe('active')
+    expect(result.engram.activation.retrieval_strength).toBe(0.7)
+    expect(result.engram.activation.storage_strength).toBe(1.0)
+  })
+
+  it('includes candidate hints by default', async () => {
+    const result = await handleLearn({ statement: 'Test' }, engramsPath)
+    expect(result._hints?.next).toContain('candidate')
+    expect(result._hints?.related).toContain('datacore.promote')
+  })
+
+  it('includes auto-promote warning when enabled', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'config.yaml'), 'engrams:\n  auto_promote: true\n')
+    loadConfig(tmpDir, 'core')
+
+    const result = await handleLearn({ statement: 'Test' }, engramsPath)
+    expect(result._hints?.warning).toContain('Auto-promotion enabled')
   })
 })
 
