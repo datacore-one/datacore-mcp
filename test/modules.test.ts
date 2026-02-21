@@ -36,8 +36,8 @@ afterEach(() => {
 })
 
 describe('discoverModules', () => {
-  it('returns empty array in standalone mode', () => {
-    const storage = { ...makeStorage(tmpDir), mode: 'standalone' as const }
+  it('returns empty array in core mode', () => {
+    const storage = { ...makeStorage(tmpDir), mode: 'core' as const }
     const modules = discoverModules(storage)
     expect(modules).toEqual([])
   })

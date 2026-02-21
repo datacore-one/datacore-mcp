@@ -6,7 +6,7 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { detectStorage, initStandalone, type StorageConfig } from './storage.js'
+import { detectStorage, initCore, type StorageConfig } from './storage.js'
 import { currentVersion, checkForUpdate } from './version.js'
 import { TOOLS } from './tools/index.js'
 import { handleCapture } from './tools/capture.js'
@@ -164,8 +164,8 @@ export function findClosestTools(name: string, allNames: string[]): string[] {
 
 async function initStorage(): Promise<void> {
   storage = detectStorage()
-  if (storage.mode === 'standalone') {
-    const result = initStandalone(storage.basePath)
+  if (storage.mode === 'core') {
+    const result = initCore(storage.basePath)
     isFirstRun = result.isFirstRun
   }
   if (storage.mode === 'full') {

@@ -43,7 +43,7 @@ Tools:
 
 Configuration:
   DATACORE_PATH             Full installation path (default: ~/Data)
-  DATACORE_STANDALONE_PATH  Standalone storage path (default: ~/Datacore)
+  DATACORE_CORE_PATH        Core mode storage path (default: ~/Datacore)
   DATACORE_TIMEZONE         IANA timezone (e.g., Europe/Ljubljana)
   DATACORE_LOG_LEVEL        Log level: debug|info|warning|error (default: warning)
   DATACORE_CACHE_TTL        File cache TTL in seconds (default: 60)

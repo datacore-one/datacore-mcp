@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import { detectStorage, initStandalone } from '../src/storage.js'
+import { detectStorage, initCore } from '../src/storage.js'
 
 describe('detectStorage', () => {
   const tmpDir = path.join(os.tmpdir(), 'datacore-test-' + Date.now())
@@ -11,7 +11,7 @@ describe('detectStorage', () => {
   beforeEach(() => {
     fs.mkdirSync(tmpDir, { recursive: true })
     delete process.env.DATACORE_PATH
-    delete process.env.DATACORE_STANDALONE_PATH
+    delete process.env.DATACORE_CORE_PATH
   })
 
   afterEach(() => {
@@ -29,72 +29,72 @@ describe('detectStorage', () => {
     expect(result.basePath).toBe(dcPath)
   })
 
-  it('returns standalone mode with custom path', () => {
-    const standalonePath = path.join(tmpDir, 'MyDatacore')
-    fs.mkdirSync(standalonePath, { recursive: true })
-    fs.writeFileSync(path.join(standalonePath, 'config.yaml'), '')
-    process.env.DATACORE_STANDALONE_PATH = standalonePath
+  it('returns core mode with custom path', () => {
+    const corePath = path.join(tmpDir, 'MyDatacore')
+    fs.mkdirSync(corePath, { recursive: true })
+    fs.writeFileSync(path.join(corePath, 'config.yaml'), '')
+    process.env.DATACORE_CORE_PATH = corePath
 
     const result = detectStorage()
-    expect(result.mode).toBe('standalone')
-    expect(result.basePath).toBe(standalonePath)
+    expect(result.mode).toBe('core')
+    expect(result.basePath).toBe(corePath)
   })
 
-  it('returns standalone mode for fresh install', () => {
+  it('returns core mode for fresh install', () => {
     process.env.HOME = tmpDir
     const result = detectStorage()
-    expect(result.mode).toBe('standalone')
+    expect(result.mode).toBe('core')
     expect(result.basePath).toBe(path.join(tmpDir, 'Datacore'))
   })
 })
 
-describe('initStandalone', () => {
+describe('initCore', () => {
   const tmpDir = path.join(os.tmpdir(), 'datacore-init-' + Date.now())
 
   beforeEach(() => fs.mkdirSync(tmpDir, { recursive: true }))
   afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }))
 
-  it('creates standalone directory structure', () => {
-    const standalonePath = path.join(tmpDir, 'Datacore')
-    initStandalone(standalonePath)
+  it('creates core directory structure', () => {
+    const corePath = path.join(tmpDir, 'Datacore')
+    initCore(corePath)
 
-    expect(fs.existsSync(path.join(standalonePath, 'journal'))).toBe(true)
-    expect(fs.existsSync(path.join(standalonePath, 'knowledge'))).toBe(true)
-    expect(fs.existsSync(path.join(standalonePath, 'packs'))).toBe(true)
-    expect(fs.existsSync(path.join(standalonePath, 'engrams.yaml'))).toBe(true)
-    expect(fs.existsSync(path.join(standalonePath, 'config.yaml'))).toBe(true)
+    expect(fs.existsSync(path.join(corePath, 'journal'))).toBe(true)
+    expect(fs.existsSync(path.join(corePath, 'knowledge'))).toBe(true)
+    expect(fs.existsSync(path.join(corePath, 'packs'))).toBe(true)
+    expect(fs.existsSync(path.join(corePath, 'engrams.yaml'))).toBe(true)
+    expect(fs.existsSync(path.join(corePath, 'config.yaml'))).toBe(true)
   })
 
   it('returns isFirstRun true for fresh install', () => {
-    const standalonePath = path.join(tmpDir, 'Fresh')
-    const result = initStandalone(standalonePath)
+    const corePath = path.join(tmpDir, 'Fresh')
+    const result = initCore(corePath)
     expect(result.isFirstRun).toBe(true)
   })
 
   it('returns isFirstRun false when engrams.yaml exists', () => {
-    const standalonePath = path.join(tmpDir, 'Existing')
-    fs.mkdirSync(standalonePath, { recursive: true })
-    fs.writeFileSync(path.join(standalonePath, 'engrams.yaml'), 'engrams: []\n')
-    const result = initStandalone(standalonePath)
+    const corePath = path.join(tmpDir, 'Existing')
+    fs.mkdirSync(corePath, { recursive: true })
+    fs.writeFileSync(path.join(corePath, 'engrams.yaml'), 'engrams: []\n')
+    const result = initCore(corePath)
     expect(result.isFirstRun).toBe(false)
   })
 
   it('does not overwrite existing files', () => {
-    const standalonePath = path.join(tmpDir, 'Datacore')
-    fs.mkdirSync(standalonePath, { recursive: true })
-    fs.writeFileSync(path.join(standalonePath, 'config.yaml'), 'custom: true')
+    const corePath = path.join(tmpDir, 'Datacore')
+    fs.mkdirSync(corePath, { recursive: true })
+    fs.writeFileSync(path.join(corePath, 'config.yaml'), 'custom: true')
 
-    initStandalone(standalonePath)
+    initCore(corePath)
 
-    const content = fs.readFileSync(path.join(standalonePath, 'config.yaml'), 'utf8')
+    const content = fs.readFileSync(path.join(corePath, 'config.yaml'), 'utf8')
     expect(content).toBe('custom: true')
   })
 
   it('copies starter packs during initialization', () => {
-    const standalonePath = path.join(tmpDir, 'Datacore')
-    initStandalone(standalonePath)
+    const corePath = path.join(tmpDir, 'Datacore')
+    initCore(corePath)
 
-    expect(fs.existsSync(path.join(standalonePath, 'packs', 'datacore-starter-v1', 'SKILL.md'))).toBe(true)
-    expect(fs.existsSync(path.join(standalonePath, 'packs', 'fds-principles-v1', 'SKILL.md'))).toBe(true)
+    expect(fs.existsSync(path.join(corePath, 'packs', 'datacore-starter-v1', 'SKILL.md'))).toBe(true)
+    expect(fs.existsSync(path.join(corePath, 'packs', 'fds-principles-v1', 'SKILL.md'))).toBe(true)
   })
 })

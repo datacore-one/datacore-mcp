@@ -3,7 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 
-export type StorageMode = 'full' | 'standalone'
+export type StorageMode = 'full' | 'core'
 
 export interface StorageConfig {
   mode: StorageMode
@@ -21,10 +21,10 @@ export function detectStorage(): StorageConfig {
     return fullConfig(dcPath)
   }
 
-  // 2. Explicit standalone path (env var overrides auto-detection)
-  const standalonePath = process.env.DATACORE_STANDALONE_PATH
-  if (standalonePath && fs.existsSync(standalonePath)) {
-    return standaloneConfig(standalonePath)
+  // 2. Explicit core path (env var overrides auto-detection)
+  const corePath = process.env.DATACORE_CORE_PATH
+  if (corePath && fs.existsSync(corePath)) {
+    return coreConfig(corePath)
   }
 
   // 3. Default full installation at ~/Data
@@ -33,8 +33,8 @@ export function detectStorage(): StorageConfig {
     return fullConfig(defaultFull)
   }
 
-  // 4. Default standalone at ~/Datacore
-  return standaloneConfig(path.join(os.homedir(), 'Datacore'))
+  // 4. Default core mode at ~/Datacore
+  return coreConfig(path.join(os.homedir(), 'Datacore'))
 }
 
 function fullConfig(basePath: string): StorageConfig {
@@ -48,9 +48,9 @@ function fullConfig(basePath: string): StorageConfig {
   }
 }
 
-function standaloneConfig(basePath: string): StorageConfig {
+function coreConfig(basePath: string): StorageConfig {
   return {
-    mode: 'standalone',
+    mode: 'core',
     basePath,
     engramsPath: path.join(basePath, 'engrams.yaml'),
     journalPath: path.join(basePath, 'journal'),
@@ -59,7 +59,7 @@ function standaloneConfig(basePath: string): StorageConfig {
   }
 }
 
-export function initStandalone(basePath: string): { isFirstRun: boolean } {
+export function initCore(basePath: string): { isFirstRun: boolean } {
   const isFirstRun = !fs.existsSync(path.join(basePath, 'engrams.yaml'))
   for (const dir of ['journal', 'knowledge', 'packs']) {
     const dirPath = path.join(basePath, dir)

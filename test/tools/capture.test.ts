@@ -17,7 +17,7 @@ describe('datacore.capture', () => {
   it('captures a journal entry for today', async () => {
     const result = await handleCapture(
       { type: 'journal', content: 'Had a productive meeting about Datacore MCP' },
-      { basePath: tmpDir, mode: 'standalone', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
+      { basePath: tmpDir, mode: 'core', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
     )
     expect(result.success).toBe(true)
     const today = new Date().toISOString().split('T')[0]
@@ -30,7 +30,7 @@ describe('datacore.capture', () => {
     fs.writeFileSync(path.join(tmpDir, 'journal', `${today}.md`), '# Journal\n\nExisting.\n')
     await handleCapture(
       { type: 'journal', content: 'Second entry' },
-      { basePath: tmpDir, mode: 'standalone', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
+      { basePath: tmpDir, mode: 'core', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
     )
     const content = fs.readFileSync(path.join(tmpDir, 'journal', `${today}.md`), 'utf8')
     expect(content).toContain('Existing')
@@ -40,7 +40,7 @@ describe('datacore.capture', () => {
   it('captures a knowledge note', async () => {
     const result = await handleCapture(
       { type: 'knowledge', content: 'MCP uses stdio by default', title: 'MCP Transport' },
-      { basePath: tmpDir, mode: 'standalone', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
+      { basePath: tmpDir, mode: 'core', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
     )
     expect(result.success).toBe(true)
     expect(fs.existsSync(result.path!)).toBe(true)
@@ -49,7 +49,7 @@ describe('datacore.capture', () => {
   it('rejects content exceeding size limit', async () => {
     const result = await handleCapture(
       { type: 'journal', content: 'x'.repeat(1_000_001) },
-      { basePath: tmpDir, mode: 'standalone', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
+      { basePath: tmpDir, mode: 'core', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
     )
     expect(result.success).toBe(false)
     expect(result.error).toContain('too large')
@@ -58,7 +58,7 @@ describe('datacore.capture', () => {
   it('rejects title exceeding length limit', async () => {
     const result = await handleCapture(
       { type: 'knowledge', content: 'test', title: 'a'.repeat(201) },
-      { basePath: tmpDir, mode: 'standalone', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
+      { basePath: tmpDir, mode: 'core', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
     )
     expect(result.success).toBe(false)
     expect(result.error).toContain('too long')

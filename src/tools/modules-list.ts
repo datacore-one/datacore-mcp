@@ -13,7 +13,7 @@ export async function handleModulesList(
     return {
       count: 0,
       modules: [],
-      message: storage.mode === 'standalone'
+      message: storage.mode === 'core'
         ? 'Module discovery requires a full Datacore installation'
         : 'No modules found',
     }

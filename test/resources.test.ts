@@ -20,7 +20,7 @@ describe('MCP Resources', () => {
     fs.writeFileSync(path.join(tmpDir, 'engrams.yaml'), 'engrams:\n  - id: ENG-2026-0101-001\n    version: 1\n    statement: Test engram\n    type: behavioral\n    scope: global\n    tags: [test]\n    domain: testing\n    status: active\n    visibility: private\n    activation:\n      retrieval_strength: 0.8\n      storage_strength: 1.0\n      frequency: 1\n      last_accessed: "2026-01-01"\n    source_patterns: []\n    feedback_signals:\n      positive: 0\n      negative: 0\n')
 
     storage = {
-      mode: 'standalone',
+      mode: 'core',
       basePath: tmpDir,
       engramsPath: path.join(tmpDir, 'engrams.yaml'),
       journalPath: path.join(tmpDir, 'journal'),
@@ -63,7 +63,7 @@ describe('MCP Resources', () => {
     const readHandler = [...handlers.values()][2]
     const result = await readHandler({ params: { uri: 'datacore://status' } })
     const data = JSON.parse(result.contents[0].text)
-    expect(data.mode).toBe('standalone')
+    expect(data.mode).toBe('core')
     expect(data.engrams).toBe(1)
   })
 

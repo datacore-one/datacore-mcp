@@ -39,7 +39,7 @@ describe('datacore.status', () => {
   it('returns counts for engrams, packs, journal, and knowledge', async () => {
     const result = await handleStatus({
       engramsPath, journalPath, knowledgePath, packsPath,
-      mode: 'standalone', basePath: tmpDir,
+      mode: 'core', basePath: tmpDir,
     })
     expect(result.engrams).toBe(1)
     expect(result.journal_entries).toBe(1)
@@ -59,7 +59,7 @@ describe('datacore.status', () => {
 
     const result = await handleStatus({
       engramsPath, journalPath, knowledgePath, packsPath,
-      mode: 'standalone', basePath: tmpDir,
+      mode: 'core', basePath: tmpDir,
     })
     expect(result.scaling_hint).toBeTruthy()
   })

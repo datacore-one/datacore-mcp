@@ -9,7 +9,7 @@ import type { StorageConfig } from '../../src/storage.js'
 
 let tmpDir: string
 
-function makeStorage(basePath: string, mode: 'full' | 'standalone' = 'full'): StorageConfig {
+function makeStorage(basePath: string, mode: 'full' | 'core' = 'full'): StorageConfig {
   return {
     mode,
     basePath,
@@ -36,8 +36,8 @@ describe('datacore.modules.list', () => {
     expect(result.modules).toEqual([])
   })
 
-  it('returns message in standalone mode', async () => {
-    const result = await handleModulesList({}, makeStorage(tmpDir, 'standalone')) as Record<string, unknown>
+  it('returns message in core mode', async () => {
+    const result = await handleModulesList({}, makeStorage(tmpDir, 'core')) as Record<string, unknown>
     expect(result.count).toBe(0)
     expect(result.message).toContain('full Datacore installation')
   })

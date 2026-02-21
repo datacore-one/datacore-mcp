@@ -13,7 +13,7 @@ describe('checkForUpdate', () => {
   it('returns null when already on latest version', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '0.1.0' }),
+      json: async () => ({ version: '1.0.0' }),
     }))
     const result = await checkForUpdate()
     expect(result).toBeNull()
@@ -23,10 +23,10 @@ describe('checkForUpdate', () => {
   it('returns new version when update available', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ version: '0.2.0' }),
+      json: async () => ({ version: '1.1.0' }),
     }))
     const result = await checkForUpdate()
-    expect(result).toBe('0.2.0')
+    expect(result).toBe('1.1.0')
     vi.unstubAllGlobals()
   })
 })
