@@ -4,7 +4,7 @@
   "description": "Datacore MCP server — The Software of You",
   "type": "module",
   "bin": {
-    "datacore-mcp": "./dist/index.js"
+    "datacore-mcp": "dist/index.js"
   },
   "main": "./dist/index.js",
   "scripts": {
@@ -42,7 +42,7 @@
   "author": "Fair Data Society",
   "repository": {
     "type": "git",
-    "url": "https://github.com/datacore-one/mcp"
+    "url": "git+https://github.com/datacore-one/mcp.git"
   },
   "engines": {
     "node": ">=22"
