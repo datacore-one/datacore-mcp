@@ -5,7 +5,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { handleDiscover } from '../../src/tools/discover.js'
 
-describe('datacore.discover', () => {
+describe('datacore.packs.discover', () => {
   const tmpDir = path.join(os.tmpdir(), 'discover-test-' + Date.now())
   const packsDir = path.join(tmpDir, 'packs')
 

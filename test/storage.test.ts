@@ -65,6 +65,20 @@ describe('initStandalone', () => {
     expect(fs.existsSync(path.join(standalonePath, 'config.yaml'))).toBe(true)
   })
 
+  it('returns isFirstRun true for fresh install', () => {
+    const standalonePath = path.join(tmpDir, 'Fresh')
+    const result = initStandalone(standalonePath)
+    expect(result.isFirstRun).toBe(true)
+  })
+
+  it('returns isFirstRun false when engrams.yaml exists', () => {
+    const standalonePath = path.join(tmpDir, 'Existing')
+    fs.mkdirSync(standalonePath, { recursive: true })
+    fs.writeFileSync(path.join(standalonePath, 'engrams.yaml'), 'engrams: []\n')
+    const result = initStandalone(standalonePath)
+    expect(result.isFirstRun).toBe(false)
+  })
+
   it('does not overwrite existing files', () => {
     const standalonePath = path.join(tmpDir, 'Datacore')
     fs.mkdirSync(standalonePath, { recursive: true })

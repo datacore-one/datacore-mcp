@@ -1,10 +1,38 @@
 // src/tools/search.ts
 import * as fs from 'fs'
 import * as path from 'path'
+import type { DatacortexBridge } from '../datacortex.js'
+
+const CONTENT_CACHE_MAX = 500
+const contentCache = new Map<string, { mtime: number; content: string }>()
+
+function getCachedContent(filePath: string): string | null {
+  const entry = contentCache.get(filePath)
+  if (!entry) return null
+  try {
+    const stat = fs.statSync(filePath)
+    if (stat.mtimeMs === entry.mtime) return entry.content
+  } catch { /* file gone */ }
+  contentCache.delete(filePath)
+  return null
+}
+
+function setCachedContent(filePath: string, content: string): void {
+  try {
+    const mtime = fs.statSync(filePath).mtimeMs
+    if (contentCache.size >= CONTENT_CACHE_MAX) {
+      // Evict oldest entry
+      const firstKey = contentCache.keys().next().value
+      if (firstKey) contentCache.delete(firstKey)
+    }
+    contentCache.set(filePath, { mtime, content })
+  } catch { /* ignore */ }
+}
 
 interface SearchArgs {
   query: string
   scope?: 'journal' | 'knowledge' | 'all'
+  method?: 'keyword' | 'semantic'
   limit?: number
 }
 
@@ -16,9 +44,34 @@ interface SearchResultItem {
 
 interface SearchResponse {
   results: SearchResultItem[]
+  method?: string
+  fallback_warning?: string
 }
 
 export async function handleSearch(
+  args: SearchArgs,
+  paths: { journalPath: string; knowledgePath: string },
+  bridge?: DatacortexBridge | null,
+): Promise<SearchResponse> {
+  // Semantic search via Datacortex bridge
+  if (args.method === 'semantic' && bridge) {
+    const availability = bridge.isAvailable()
+    if (availability.available) {
+      const result = await bridge.search(args.query, args.limit ?? 20)
+      if (!result.fallback) {
+        return { results: result.results, method: 'semantic' }
+      }
+      // Fall through to keyword search with warning
+    }
+    // Semantic unavailable — fall back with warning
+    const keywordResults = await keywordSearch(args, paths)
+    return { ...keywordResults, method: 'keyword', fallback_warning: 'Semantic search unavailable, using keyword fallback' }
+  }
+
+  return keywordSearch(args, paths)
+}
+
+async function keywordSearch(
   args: SearchArgs,
   paths: { journalPath: string; knowledgePath: string },
 ): Promise<SearchResponse> {
@@ -34,7 +87,7 @@ export async function handleSearch(
   }
 
   results.sort((a, b) => b.score - a.score)
-  return { results: results.slice(0, limit) }
+  return { results: results.slice(0, limit), method: 'keyword' }
 }
 
 function searchDir(dirPath: string, query: string): SearchResultItem[] {
@@ -44,7 +97,11 @@ function searchDir(dirPath: string, query: string): SearchResultItem[] {
 
   for (const file of walkDir(dirPath)) {
     if (!file.endsWith('.md')) continue
-    const content = fs.readFileSync(file, 'utf8')
+    const content = getCachedContent(file) ?? (() => {
+      const c = fs.readFileSync(file, 'utf8')
+      setCachedContent(file, c)
+      return c
+    })()
     const contentLower = content.toLowerCase()
     const occurrences = countOccurrences(contentLower, queryLower)
     if (occurrences === 0) continue

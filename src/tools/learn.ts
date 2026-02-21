@@ -17,11 +17,23 @@ interface LearnResult {
   engram: Engram
 }
 
-function generateEngramId(): string {
+export function generateEngramId(existingEngrams: Engram[]): string {
   const now = new Date()
   const date = now.toISOString().split('T')[0].replace(/-/g, '').slice(0, 8)
-  const seq = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')
-  return `ENG-${date.slice(0, 4)}-${date.slice(4)}-${seq}`
+  const prefix = `ENG-${date.slice(0, 4)}-${date.slice(4)}-`
+
+  // Find highest seq for today
+  let maxSeq = 0
+  for (const e of existingEngrams) {
+    if (e.id.startsWith(prefix)) {
+      const seq = parseInt(e.id.slice(prefix.length), 10)
+      if (seq > maxSeq) maxSeq = seq
+    }
+  }
+
+  const nextSeq = maxSeq + 1
+  const padWidth = nextSeq > 999 ? String(nextSeq).length : 3
+  return `${prefix}${String(nextSeq).padStart(padWidth, '0')}`
 }
 
 export async function handleLearn(args: LearnArgs, engramsPath: string): Promise<LearnResult> {
@@ -29,7 +41,7 @@ export async function handleLearn(args: LearnArgs, engramsPath: string): Promise
   const today = new Date().toISOString().split('T')[0]
 
   const engram: Engram = {
-    id: generateEngramId(),
+    id: generateEngramId(engrams),
     version: 2,
     status: 'candidate',
     consolidated: false,

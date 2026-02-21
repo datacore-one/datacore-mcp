@@ -10,7 +10,8 @@
       "tags": ["methodology", "gtd", "knowledge-management"],
       "download_url": "",
       "engram_count": 5,
-      "free": true
+      "free": true,
+      "checksum": "4fb30b260c6ba5fd36e7cf9240f0a651ca484c777ab4a7be0b3438627138f1a3"
     },
     {
       "id": "fds-principles-v1",
@@ -21,7 +22,8 @@
       "tags": ["ethics", "data-sovereignty", "privacy", "consent"],
       "download_url": "",
       "engram_count": 10,
-      "free": true
+      "free": true,
+      "checksum": "8cc7bbb7e259486b16370511fefe937532ee7dcba60ce87c2cd6b8647b5b9847"
     },
     {
       "id": "dips-v1",
@@ -32,7 +34,8 @@
       "tags": ["architecture", "patterns", "gtd", "modules", "knowledge-management"],
       "download_url": "",
       "engram_count": 747,
-      "free": true
+      "free": true,
+      "checksum": "08185777c38e3a91fbb0f92e7ef388c5940e97e69be6dcce8ce119bd2b33968c"
     }
   ]
 }

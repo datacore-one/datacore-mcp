@@ -1,7 +1,7 @@
 // src/tools/modules-health.ts
 import * as fs from 'fs'
 import * as path from 'path'
-import { discoverModules } from '../modules.js'
+import { discoverModules, type DiscoveredModule } from '../modules.js'
 import type { StorageConfig } from '../storage.js'
 
 interface HealthCheck {
@@ -13,19 +13,20 @@ interface HealthCheck {
 export async function handleModulesHealth(
   args: { module?: string },
   storage: StorageConfig,
+  cachedModules?: DiscoveredModule[],
 ): Promise<unknown> {
-  const modules = discoverModules(storage)
+  const modules = cachedModules ?? discoverModules(storage)
 
   if (args.module) {
     const found = modules.find(m => m.manifest.name === args.module)
     if (!found) {
       return { error: `Module '${args.module}' not found` }
     }
-    return checkModule(found, storage)
+    return await checkModule(found, storage)
   }
 
   // Check all modules
-  const checks = modules.map(m => checkModule(m, storage))
+  const checks = await Promise.all(modules.map(m => checkModule(m, storage)))
   const ok = checks.filter(c => c.status === 'ok').length
   const warnings = checks.filter(c => c.status === 'warning').length
   const errors = checks.filter(c => c.status === 'error').length
@@ -36,10 +37,10 @@ export async function handleModulesHealth(
   }
 }
 
-function checkModule(
+async function checkModule(
   mod: { name: string; manifest: Record<string, unknown>; modulePath: string },
   storage: StorageConfig,
-): HealthCheck {
+): Promise<HealthCheck> {
   const issues: string[] = []
   const manifest = mod.manifest as Record<string, unknown>
 
@@ -72,6 +73,19 @@ function checkModule(
     const toolsIndex = path.join(mod.modulePath, 'tools', 'index.js')
     if (!fs.existsSync(toolsIndex)) {
       issues.push(`Declares ${declaredTools.length} tools but tools/index.js not found`)
+    } else {
+      // Attempt to verify exports match declarations
+      try {
+        const toolModule = await import(toolsIndex)
+        for (const tool of declaredTools) {
+          const handlerName = tool.handler || tool.name
+          if (typeof toolModule[handlerName] !== 'function') {
+            issues.push(`Tool '${tool.name}' declares handler '${handlerName}' but export not found`)
+          }
+        }
+      } catch (err) {
+        issues.push(`tools/index.js failed to load: ${err instanceof Error ? err.message : err}`)
+      }
     }
   }
 

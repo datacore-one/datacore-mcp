@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import { handleCapture } from '../../src/tools/capture.js'
+import { handleCapture, localDate } from '../../src/tools/capture.js'
 
 describe('datacore.capture', () => {
   const tmpDir = path.join(os.tmpdir(), 'capture-test-' + Date.now())
@@ -44,5 +44,36 @@ describe('datacore.capture', () => {
     )
     expect(result.success).toBe(true)
     expect(fs.existsSync(result.path!)).toBe(true)
+  })
+
+  it('rejects content exceeding size limit', async () => {
+    const result = await handleCapture(
+      { type: 'journal', content: 'x'.repeat(1_000_001) },
+      { basePath: tmpDir, mode: 'standalone', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('too large')
+  })
+
+  it('rejects title exceeding length limit', async () => {
+    const result = await handleCapture(
+      { type: 'knowledge', content: 'test', title: 'a'.repeat(201) },
+      { basePath: tmpDir, mode: 'standalone', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('too long')
+  })
+})
+
+describe('localDate', () => {
+  it('returns YYYY-MM-DD date and HH:MM time', () => {
+    const { date, time } = localDate()
+    expect(date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(time).toMatch(/^\d{2}:\d{2}$/)
+  })
+
+  it('uses timezone from parameter', () => {
+    const { date: tokyoDate } = localDate('Asia/Tokyo')
+    expect(tokyoDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 })

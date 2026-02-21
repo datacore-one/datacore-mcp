@@ -1,12 +1,13 @@
 // src/tools/modules-list.ts
-import { discoverModules } from '../modules.js'
+import { discoverModules, type DiscoveredModule } from '../modules.js'
 import type { StorageConfig } from '../storage.js'
 
 export async function handleModulesList(
   _args: unknown,
   storage: StorageConfig,
+  cachedModules?: DiscoveredModule[],
 ): Promise<unknown> {
-  const modules = discoverModules(storage)
+  const modules = cachedModules ?? discoverModules(storage)
 
   if (modules.length === 0) {
     return {

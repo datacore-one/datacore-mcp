@@ -13,6 +13,7 @@ interface DiscoverPack extends RegistryPack {
   installed: boolean
   installed_version?: string
   upgradeable: boolean
+  can_install: boolean
 }
 
 interface DiscoverResult {
@@ -39,6 +40,7 @@ export function handleDiscover(
       installed,
       installed_version: installedVersion,
       upgradeable: installed && installedVersion !== p.version,
+      can_install: !!p.download_url,
     }
   })
 

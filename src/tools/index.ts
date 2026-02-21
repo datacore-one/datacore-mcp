@@ -40,6 +40,7 @@ export const TOOLS = [
     inputSchema: z.object({
       query: z.string().describe('Search query'),
       scope: z.enum(['journal', 'knowledge', 'all']).optional(),
+      method: z.enum(['keyword', 'semantic']).optional().describe('Search method (default: keyword)'),
       limit: z.number().optional().describe('Max results (default: 20)'),
     }),
   },
@@ -58,7 +59,7 @@ export const TOOLS = [
     inputSchema: z.object({}),
   },
   {
-    name: 'datacore.discover',
+    name: 'datacore.packs.discover',
     description: 'Browse available engram packs from the registry',
     inputSchema: z.object({
       query: z.string().optional().describe('Filter by name/description'),
@@ -66,7 +67,7 @@ export const TOOLS = [
     }),
   },
   {
-    name: 'datacore.install',
+    name: 'datacore.packs.install',
     description: 'Install or upgrade an engram pack',
     inputSchema: z.object({
       source: z.string().describe('Pack source: local path or pack ID from registry'),
@@ -78,6 +79,27 @@ export const TOOLS = [
     inputSchema: z.object({
       id: z.string().optional().describe('Exact engram ID to retire (e.g., ENG-2026-0219-001)'),
       search: z.string().optional().describe('Search term to find engram by statement, tag, or ID fragment'),
+    }),
+  },
+  {
+    name: 'datacore.feedback',
+    description: 'Signal whether an injected engram was helpful (positive), unhelpful (negative), or seen but not acted on (neutral)',
+    inputSchema: z.object({
+      engram_id: z.string().describe('The engram ID to provide feedback on'),
+      signal: z.enum(['positive', 'negative', 'neutral']).describe('Feedback signal'),
+      comment: z.string().optional().describe('Optional comment about why'),
+    }),
+  },
+  {
+    name: 'datacore.packs.export',
+    description: 'Export personal engrams as a shareable pack. Preview by default, set confirm=true to write.',
+    inputSchema: z.object({
+      name: z.string().describe('Pack name'),
+      description: z.string().describe('Pack description'),
+      engram_ids: z.array(z.string()).optional().describe('Specific engram IDs to export'),
+      filter_tags: z.array(z.string()).optional().describe('Filter by tags'),
+      filter_domain: z.string().optional().describe('Filter by domain prefix'),
+      confirm: z.boolean().optional().describe('Set true to write pack (default: preview only)'),
     }),
   },
   {

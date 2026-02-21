@@ -2,6 +2,7 @@
 import * as fs from 'fs'
 import * as yaml from 'js-yaml'
 import { EngramSchema, PackManifestSchema, type Engram, type PackManifest } from './schemas/engram.js'
+import { logger } from './logger.js'
 
 export function loadEngrams(filePath: string): Engram[] {
   if (!fs.existsSync(filePath)) return []
@@ -11,17 +12,21 @@ export function loadEngrams(filePath: string): Engram[] {
     if (!raw?.engrams || !Array.isArray(raw.engrams)) return []
 
     const valid: Engram[] = []
+    let skipped = 0
     for (const entry of raw.engrams) {
       const result = EngramSchema.safeParse(entry)
       if (result.success) {
         valid.push(result.data)
       } else {
-        console.warn(`Skipping invalid engram ${entry?.id ?? 'unknown'}:`, result.error.message)
+        skipped++
       }
+    }
+    if (skipped > 0) {
+      logger.warning(`Skipped ${skipped} invalid engram(s) in ${filePath}`)
     }
     return valid
   } catch (err) {
-    console.warn(`Failed to parse engrams file ${filePath}:`, err)
+    logger.error(`Failed to parse engrams file ${filePath}: ${err}`)
     return []
   }
 }
@@ -70,7 +75,7 @@ export function loadAllPacks(packsDir: string): LoadedPack[] {
     try {
       packs.push(loadPack(packDir))
     } catch (err) {
-      console.warn(`Failed to load pack ${entry}:`, err)
+      logger.warning(`Failed to load pack ${entry}: ${err}`)
     }
   }
   return packs

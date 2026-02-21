@@ -59,7 +59,8 @@ function standaloneConfig(basePath: string): StorageConfig {
   }
 }
 
-export function initStandalone(basePath: string): void {
+export function initStandalone(basePath: string): { isFirstRun: boolean } {
+  const isFirstRun = !fs.existsSync(path.join(basePath, 'engrams.yaml'))
   for (const dir of ['journal', 'knowledge', 'packs']) {
     const dirPath = path.join(basePath, dir)
     if (!fs.existsSync(dirPath)) {
@@ -78,6 +79,7 @@ export function initStandalone(basePath: string): void {
   }
 
   copyStarterPacks(basePath)
+  return { isFirstRun }
 }
 
 function copyStarterPacks(basePath: string): void {

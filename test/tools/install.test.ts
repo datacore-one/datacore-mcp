@@ -5,7 +5,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { handleInstall } from '../../src/tools/install.js'
 
-describe('datacore.install', () => {
+describe('datacore.packs.install', () => {
   const tmpDir = path.join(os.tmpdir(), 'install-test-' + Date.now())
   const packsDir = path.join(tmpDir, 'packs')
 

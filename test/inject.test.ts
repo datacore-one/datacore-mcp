@@ -162,4 +162,28 @@ describe('selectEngrams', () => {
     const result = selectEngrams(ctx, engrams, [])
     expect(result.directives[0].id).toBe('ENG-001')
   })
+
+  it('applies decay to personal engrams (old engrams score lower)', () => {
+    const ctx: InjectionContext = { prompt: 'data handling', minRelevance: 0.1 }
+    const engrams = [
+      makeEngram({ id: 'ENG-001', statement: 'Recent engram', tags: ['data'],
+        activation: { retrieval_strength: 0.8, storage_strength: 0.5, frequency: 3, last_accessed: new Date().toISOString().split('T')[0] } }),
+      makeEngram({ id: 'ENG-002', statement: 'Old engram', tags: ['data'],
+        activation: { retrieval_strength: 0.8, storage_strength: 0.5, frequency: 3, last_accessed: '2025-01-01' } }),
+    ]
+    const result = selectEngrams(ctx, engrams, [])
+    const all = [...result.directives, ...result.consider]
+    expect(all[0].id).toBe('ENG-001')
+  })
+
+  it('does not apply decay to pack engrams', () => {
+    const ctx: InjectionContext = { prompt: 'consent data design' }
+    const pack = makePack('fds-v1', 'on_match', ['design', 'consent', 'data'], [
+      makeEngram({ id: 'ENG-PACK-001', statement: 'Require explicit consent', tags: ['consent'], pack: 'fds-v1',
+        activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: '2024-01-01' } }),
+    ])
+    const result = selectEngrams(ctx, [], [pack])
+    // Pack engram should still match despite very old last_accessed
+    expect(result.directives.length + result.consider.length).toBe(1)
+  })
 })

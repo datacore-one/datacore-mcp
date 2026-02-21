@@ -1,5 +1,5 @@
 // test/engrams.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
@@ -42,7 +42,8 @@ describe('loadEngrams', () => {
     expect(result[0].statement).toBe('Test engram')
   })
 
-  it('skips invalid engrams and continues', () => {
+  it('skips invalid engrams and logs warning', () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const filePath = path.join(tmpDir, 'engrams.yaml')
     fs.writeFileSync(filePath, `engrams:
   - id: ENG-2026-0219-001
@@ -60,6 +61,20 @@ describe('loadEngrams', () => {
     status: invalid
 `)
     expect(loadEngrams(filePath)).toHaveLength(1)
+    const logged = stderrSpy.mock.calls.map(c => c[0] as string).join('')
+    expect(logged).toContain('Skipped 1 invalid engram')
+    stderrSpy.mockRestore()
+  })
+
+  it('logs error for corrupted YAML', () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const filePath = path.join(tmpDir, 'engrams.yaml')
+    fs.writeFileSync(filePath, ': [invalid yaml : {{{}}}')
+    const result = loadEngrams(filePath)
+    expect(result).toEqual([])
+    const logged = stderrSpy.mock.calls.map(c => c[0] as string).join('')
+    expect(logged).toContain('Failed to parse engrams file')
+    stderrSpy.mockRestore()
   })
 })
 

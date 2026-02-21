@@ -1,4 +1,7 @@
 // src/tools/inject-tool.ts
+import * as fs from 'fs'
+import * as path from 'path'
+import * as yaml from 'js-yaml'
 import { loadEngrams, loadAllPacks } from '../engrams.js'
 import { selectEngrams, type InjectionContext } from '../inject.js'
 import type { Engram } from '../schemas/engram.js'
@@ -51,7 +54,47 @@ export async function handleInject(
     }
   }
 
+  // Update usage tracking for selected personal engrams
+  updateUsageTracking(
+    paths.engramsPath,
+    personalEngrams,
+    [...result.directives, ...result.consider],
+  )
+
   return { text: lines.join('\n'), count: totalCount, tokens_used: result.tokens_used }
+}
+
+function updateUsageTracking(
+  engramsPath: string,
+  allPersonal: Engram[],
+  selected: Engram[],
+): void {
+  const selectedPersonalIds = new Set(
+    selected.filter(e => !e.pack).map(e => e.id),
+  )
+  if (selectedPersonalIds.size === 0) return
+
+  const today = new Date().toISOString().split('T')[0]
+  let changed = false
+
+  for (const engram of allPersonal) {
+    if (selectedPersonalIds.has(engram.id)) {
+      engram.activation.last_accessed = today
+      engram.activation.frequency += 1
+      changed = true
+    }
+  }
+
+  if (changed) {
+    atomicWriteYaml(engramsPath, { engrams: allPersonal })
+  }
+}
+
+export function atomicWriteYaml(filePath: string, data: unknown): void {
+  const content = yaml.dump(data, { lineWidth: 120, noRefs: true, quotingType: '"' })
+  const tmpPath = filePath + '.tmp.' + process.pid
+  fs.writeFileSync(tmpPath, content)
+  fs.renameSync(tmpPath, filePath)
 }
 
 function formatEngram(engram: Engram, totalCount: number): string {

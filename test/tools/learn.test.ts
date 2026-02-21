@@ -3,8 +3,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import { handleLearn } from '../../src/tools/learn.js'
+import { handleLearn, generateEngramId } from '../../src/tools/learn.js'
 import { loadEngrams } from '../../src/engrams.js'
+import type { Engram } from '../../src/schemas/engram.js'
 
 describe('datacore.learn', () => {
   const tmpDir = path.join(os.tmpdir(), 'learn-test-' + Date.now())
@@ -22,7 +23,7 @@ describe('datacore.learn', () => {
       engramsPath,
     )
     expect(result.success).toBe(true)
-    expect(result.engram.id).toMatch(/^ENG-\d{4}-\d{4}-\d{3}$/)
+    expect(result.engram.id).toMatch(/^ENG-\d{4}-\d{4}-\d{3,}$/)
     expect(result.engram.statement).toBe('Always validate input at system boundaries')
     expect(result.engram.status).toBe('candidate')
     expect(result.engram.visibility).toBe('private')
@@ -43,5 +44,31 @@ describe('datacore.learn', () => {
     await handleLearn({ statement: 'Second' }, engramsPath)
     const engrams = loadEngrams(engramsPath)
     expect(engrams).toHaveLength(2)
+  })
+})
+
+describe('generateEngramId', () => {
+  it('increments from existing engrams for the same day', () => {
+    const today = new Date().toISOString().split('T')[0].replace(/-/g, '').slice(0, 8)
+    const prefix = `ENG-${today.slice(0, 4)}-${today.slice(4)}-`
+    const existing = [
+      { id: `${prefix}001` },
+      { id: `${prefix}003` },
+    ] as Engram[]
+    const newId = generateEngramId(existing)
+    expect(newId).toBe(`${prefix}004`)
+  })
+
+  it('starts at 001 when no existing engrams for today', () => {
+    const id = generateEngramId([])
+    expect(id).toMatch(/^ENG-\d{4}-\d{4}-001$/)
+  })
+
+  it('rolls to 4+ digits past 999', () => {
+    const today = new Date().toISOString().split('T')[0].replace(/-/g, '').slice(0, 8)
+    const prefix = `ENG-${today.slice(0, 4)}-${today.slice(4)}-`
+    const existing = [{ id: `${prefix}999` }] as Engram[]
+    const newId = generateEngramId(existing)
+    expect(newId).toBe(`${prefix}1000`)
   })
 })

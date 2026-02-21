@@ -1,6 +1,7 @@
 // src/inject.ts
 import type { Engram } from './schemas/engram.js'
 import type { LoadedPack } from './engrams.js'
+import { decayedStrength } from './decay.js'
 
 export interface InjectionContext {
   prompt: string
@@ -37,7 +38,7 @@ export function selectEngrams(
 
   for (const engram of personalEngrams) {
     if (engram.status !== 'active') continue
-    const score = scoreEngram(engram, promptLower, promptWords, [], ctx.scope)
+    const score = scoreEngram(engram, promptLower, promptWords, [], ctx.scope, false)
     if (score > 0) scored.push({ engram, score })
   }
 
@@ -46,7 +47,7 @@ export function selectEngrams(
     const matchTerms = pack.manifest['x-datacore'].match_terms
     for (const engram of pack.engrams) {
       if (engram.status !== 'active') continue
-      const score = scoreEngram(engram, promptLower, promptWords, matchTerms, ctx.scope)
+      const score = scoreEngram(engram, promptLower, promptWords, matchTerms, ctx.scope, true)
       if (score > 0) scored.push({ engram, score })
     }
   }
@@ -70,7 +71,7 @@ export function selectEngrams(
   }
 }
 
-function scoreEngram(engram: Engram, promptLower: string, promptWords: Set<string>, packMatchTerms: string[], scopeFilter?: string): number {
+function scoreEngram(engram: Engram, promptLower: string, promptWords: Set<string>, packMatchTerms: string[], scopeFilter: string | undefined, isPack: boolean): number {
   // Scope filtering: if scope is specified, only include matching engrams
   if (scopeFilter) {
     if (scopeFilter === 'global') {
@@ -96,16 +97,20 @@ function scoreEngram(engram: Engram, promptLower: string, promptWords: Set<strin
       if (promptWords.has(part.toLowerCase())) termHits++
     }
   }
-  // Statement keyword overlap (lower weight)
-  const statementLower = engram.statement.toLowerCase()
+  // Statement keyword overlap — word-boundary matching (lower weight)
+  const statementWords = new Set(engram.statement.toLowerCase().split(/\W+/).filter(w => w.length > 2))
   for (const word of promptWords) {
-    if (statementLower.includes(word)) termHits += 0.5
+    if (statementWords.has(word)) termHits += 0.5
   }
 
   if (termHits === 0) return 0
 
-  // Base score from term hits * retrieval strength
-  let score = termHits * engram.activation.retrieval_strength
+  // Base score from term hits * (decayed) retrieval strength
+  // Pack engrams use raw RS (read-only, can't track usage)
+  const rs = isPack
+    ? engram.activation.retrieval_strength
+    : decayedStrength(engram.activation.retrieval_strength, engram.activation.last_accessed)
+  let score = termHits * rs
 
   // Feedback signal boost: positive feedback increases score, negative decreases
   const feedback = engram.feedback_signals
