@@ -1,5 +1,7 @@
 // src/tools/learn.ts
 import { loadEngrams, saveEngrams } from '../engrams.js'
+import { getConfig } from '../config.js'
+import { buildHints } from '../hints.js'
 import type { Engram } from '../schemas/engram.js'
 
 interface LearnArgs {
@@ -15,6 +17,7 @@ interface LearnArgs {
 interface LearnResult {
   success: boolean
   engram: Engram
+  _hints?: ReturnType<typeof buildHints>
 }
 
 export function generateEngramId(existingEngrams: Engram[]): string {
@@ -39,11 +42,12 @@ export function generateEngramId(existingEngrams: Engram[]): string {
 export async function handleLearn(args: LearnArgs, engramsPath: string): Promise<LearnResult> {
   const engrams = loadEngrams(engramsPath)
   const today = new Date().toISOString().split('T')[0]
+  const autoPromote = getConfig().engrams.auto_promote
 
   const engram: Engram = {
     id: generateEngramId(engrams),
     version: 2,
-    status: 'candidate',
+    status: autoPromote ? 'active' : 'candidate',
     consolidated: false,
     type: args.type ?? 'behavioral',
     scope: args.scope ?? 'global',
@@ -54,8 +58,8 @@ export async function handleLearn(args: LearnArgs, engramsPath: string): Promise
     domain: args.domain,
     tags: args.tags ?? [],
     activation: {
-      retrieval_strength: 0.5,
-      storage_strength: 0.3,
+      retrieval_strength: autoPromote ? 0.7 : 0.5,
+      storage_strength: autoPromote ? 1.0 : 0.3,
       frequency: 0,
       last_accessed: today,
     },
@@ -66,5 +70,18 @@ export async function handleLearn(args: LearnArgs, engramsPath: string): Promise
 
   engrams.push(engram)
   saveEngrams(engramsPath, engrams)
-  return { success: true, engram }
+
+  const statusLabel = autoPromote ? 'active' : 'candidate'
+  const hints = autoPromote
+    ? buildHints({
+        next: 'Created as active (auto_promote on). Use datacore.inject to retrieve.',
+        related: ['datacore.inject'],
+        warning: 'Auto-promotion enabled. Engrams are immediately active without review.',
+      })
+    : buildHints({
+        next: 'Created as candidate. Use datacore.promote to activate.',
+        related: ['datacore.promote', 'datacore.inject'],
+      })
+
+  return { success: true, engram, _hints: hints }
 }

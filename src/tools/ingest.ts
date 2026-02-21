@@ -2,6 +2,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { validateContent, validateTitle } from '../limits.js'
+import { buildHints } from '../hints.js'
 
 interface IngestArgs {
   content: string
@@ -14,6 +15,7 @@ interface IngestResult {
   note_path?: string
   engram_suggestions?: string[]
   error?: string
+  _hints?: ReturnType<typeof buildHints>
 }
 
 export async function handleIngest(
@@ -43,6 +45,12 @@ export async function handleIngest(
     success: true,
     note_path: filePath,
     engram_suggestions: suggestions.length > 0 ? suggestions : undefined,
+    _hints: suggestions.length > 0
+      ? buildHints({
+          next: `Call datacore.learn for each suggestion to create engrams. Example: datacore.learn({statement: '${suggestions[0]}', type: 'behavioral'})`,
+          related: ['datacore.learn'],
+        })
+      : undefined,
   }
 }
 

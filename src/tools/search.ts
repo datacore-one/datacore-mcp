@@ -2,6 +2,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import type { DatacortexBridge } from '../datacortex.js'
+import { getConfig } from '../config.js'
 
 const CONTENT_CACHE_MAX = 500
 const contentCache = new Map<string, { mtime: number; content: string }>()
@@ -21,7 +22,6 @@ function setCachedContent(filePath: string, content: string): void {
   try {
     const mtime = fs.statSync(filePath).mtimeMs
     if (contentCache.size >= CONTENT_CACHE_MAX) {
-      // Evict oldest entry
       const firstKey = contentCache.keys().next().value
       if (firstKey) contentCache.delete(firstKey)
     }
@@ -40,6 +40,8 @@ interface SearchResultItem {
   path: string
   snippet: string
   score: number
+  title?: string
+  date?: string
 }
 
 interface SearchResponse {
@@ -61,9 +63,7 @@ export async function handleSearch(
       if (!result.fallback) {
         return { results: result.results, method: 'semantic' }
       }
-      // Fall through to keyword search with warning
     }
-    // Semantic unavailable — fall back with warning
     const keywordResults = await keywordSearch(args, paths)
     return { ...keywordResults, method: 'keyword', fallback_warning: 'Semantic search unavailable, using keyword fallback' }
   }
@@ -107,7 +107,9 @@ function searchDir(dirPath: string, query: string): SearchResultItem[] {
     if (occurrences === 0) continue
 
     const snippet = extractSnippet(content, query)
-    results.push({ path: file, snippet, score: occurrences })
+    const title = extractTitle(content, file)
+    const date = extractDate(file)
+    results.push({ path: file, snippet, score: occurrences, title, date })
   }
   return results
 }
@@ -133,9 +135,27 @@ function countOccurrences(text: string, query: string): number {
 }
 
 function extractSnippet(content: string, query: string): string {
+  const snippetLength = getConfig().search.snippet_length
+
+  // Small files: return full content
+  if (content.length < 2000) return content
+
   const idx = content.toLowerCase().indexOf(query.toLowerCase())
-  if (idx === -1) return content.slice(0, 100)
-  const start = Math.max(0, idx - 50)
-  const end = Math.min(content.length, idx + query.length + 50)
+  if (idx === -1) return content.slice(0, snippetLength)
+  const half = Math.floor(snippetLength / 2)
+  const start = Math.max(0, idx - half)
+  const end = Math.min(content.length, idx + query.length + half)
   return (start > 0 ? '...' : '') + content.slice(start, end) + (end < content.length ? '...' : '')
+}
+
+function extractTitle(content: string, filePath: string): string | undefined {
+  const match = content.match(/^#\s+(.+)$/m)
+  if (match) return match[1].trim()
+  return path.basename(filePath, path.extname(filePath))
+}
+
+function extractDate(filePath: string): string | undefined {
+  const match = path.basename(filePath).match(/^(\d{4}-\d{2}-\d{2})/)
+  if (match) return match[1]
+  return undefined
 }

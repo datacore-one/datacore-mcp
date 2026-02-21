@@ -4,6 +4,7 @@ import * as path from 'path'
 import * as yaml from 'js-yaml'
 import { loadEngrams, loadAllPacks } from '../engrams.js'
 import { selectEngrams, type InjectionContext } from '../inject.js'
+import { buildHints } from '../hints.js'
 import type { Engram } from '../schemas/engram.js'
 
 interface InjectArgs {
@@ -17,6 +18,7 @@ interface InjectResult {
   text: string
   count: number
   tokens_used: number
+  _hints?: ReturnType<typeof buildHints>
 }
 
 export async function handleInject(
@@ -61,7 +63,21 @@ export async function handleInject(
     [...result.directives, ...result.consider],
   )
 
-  return { text: lines.join('\n'), count: totalCount, tokens_used: result.tokens_used }
+  const injectedIds = [...result.directives, ...result.consider]
+    .filter(e => !e.pack)
+    .map(e => e.id)
+
+  const idsList = injectedIds.length > 0 ? ` Injected IDs: ${injectedIds.join(', ')}` : ''
+
+  return {
+    text: lines.join('\n'),
+    count: totalCount,
+    tokens_used: result.tokens_used,
+    _hints: buildHints({
+      next: `After task, call datacore.feedback on helpful/unhelpful engrams.${idsList}`,
+      related: ['datacore.feedback', 'datacore.session.end'],
+    }),
+  }
 }
 
 function updateUsageTracking(

@@ -1,6 +1,6 @@
 {
   "name": "@datacore-one/mcp",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Datacore MCP server — The Software of You",
   "type": "module",
   "bin": {

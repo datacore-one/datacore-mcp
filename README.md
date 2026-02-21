@@ -18,7 +18,24 @@ Install globally:
 npm install -g @datacore-one/mcp
 ```
 
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+Then connect from any MCP-compatible client. On first use, the server creates `~/Datacore/` with:
+
+- `engrams.yaml` — Your learned knowledge
+- `journal/` — Daily session logs
+- `knowledge/` — Ingested reference material
+- `packs/` — Engram packs (starter packs installed automatically)
+- `config.yaml` — Configuration (all fields optional)
+- `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.github/copilot-instructions.md` — Editor context files so any AI assistant immediately understands Datacore
+
+Everything is plain text -- no databases, no lock-in.
+
+## Connecting
+
+Datacore is a standard [MCP](https://modelcontextprotocol.io) server. It works with any client that speaks MCP v1.0+ over stdio or HTTP -- the AI model behind the client does not matter.
+
+### Claude Code
+
+Add to `.mcp.json` in your project root (or `~/.claude.json` globally):
 
 ```json
 {
@@ -30,7 +47,9 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 }
 ```
 
-Or for Claude Code, add to `.mcp.json` in your project root:
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -42,7 +61,19 @@ Or for Claude Code, add to `.mcp.json` in your project root:
 }
 ```
 
-On first use, the server creates `~/Datacore/` with your engrams, journal, and knowledge files. Everything is plain text -- no databases, no lock-in.
+### Cursor / Windsurf / Other MCP Clients
+
+Most MCP-compatible editors use the same config format. Check your editor's MCP documentation for where to place the server config. The command is always `datacore-mcp`.
+
+### HTTP (Remote / Multi-Client)
+
+For shared or remote setups, run in HTTP mode:
+
+```bash
+datacore-mcp --http
+```
+
+Then point your MCP client to `http://127.0.0.1:3100/mcp`. See [HTTP Transport](#http-transport) for options.
 
 ## Two Modes
 
@@ -55,7 +86,14 @@ Mode is auto-detected. If you have a full [Datacore](https://github.com/datacore
 
 Override with environment variables: `DATACORE_PATH` (full) or `DATACORE_CORE_PATH` (core).
 
-## Tools
+## Tools (17 core + 3 full-mode)
+
+### Session
+
+| Tool | Description |
+|------|-------------|
+| `datacore.session.start` | Begin a session — injects relevant engrams, shows today's journal |
+| `datacore.session.end` | End a session — captures journal summary and creates engrams |
 
 ### Core
 
@@ -64,15 +102,17 @@ Override with environment variables: `DATACORE_PATH` (full) or `DATACORE_CORE_PA
 | `datacore.capture` | Write a journal entry or knowledge note |
 | `datacore.learn` | Create an engram from a statement |
 | `datacore.inject` | Get relevant engrams for a task |
-| `datacore.search` | Search journal and knowledge by keyword |
+| `datacore.recall` | Search all sources (engrams + journal + knowledge) |
+| `datacore.search` | Search journal and knowledge by keyword or semantic |
 | `datacore.ingest` | Ingest text as a knowledge note with engram extraction |
-| `datacore.status` | System status, counts, update info |
+| `datacore.status` | System status, counts, actionable recommendations |
 
 ### Lifecycle
 
 | Tool | Description |
 |------|-------------|
-| `datacore.feedback` | Signal whether an injected engram was helpful |
+| `datacore.promote` | Activate candidate engrams |
+| `datacore.feedback` | Signal whether engrams were helpful (single or batch) |
 | `datacore.forget` | Retire an engram by ID or search |
 
 ### Packs
@@ -90,6 +130,29 @@ Override with environment variables: `DATACORE_PATH` (full) or `DATACORE_CORE_PA
 | `datacore.modules.list` | List installed modules |
 | `datacore.modules.info` | Detailed info about a module |
 | `datacore.modules.health` | Health check for modules |
+
+## Prompts
+
+The server provides MCP prompts — workflow templates your AI can discover and use automatically:
+
+| Prompt | Description |
+|--------|-------------|
+| `datacore-session` | Start a working session with context injection |
+| `datacore-learn` | Record a learning through the engram lifecycle |
+| `datacore-guide` | Complete guide to all tools and workflows |
+
+Prompts are the primary way the AI understands Datacore. When your AI connects, it can list available prompts and immediately knows the session lifecycle, engram workflow, and how all tools relate.
+
+## Resources
+
+| Resource | Description |
+|----------|-------------|
+| `datacore://guide` | Agent workflow reference (markdown) |
+| `datacore://status` | System status summary (JSON) |
+| `datacore://engrams/active` | All active engrams (JSON) |
+| `datacore://journal/today` | Today's journal entry (markdown) |
+| `datacore://journal/{date}` | Journal entry by date |
+| `datacore://engrams/{id}` | Specific engram by ID |
 
 ## How Engrams Work
 
@@ -123,6 +186,8 @@ Bundled starter packs are installed automatically on first run.
 
 ## Configuration
 
+### Environment Variables
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATACORE_PATH` | `~/Data` | Full installation path |
@@ -134,6 +199,25 @@ Bundled starter packs are installed automatically on first run.
 | `DATACORE_HTTP_PORT` | `3100` | HTTP transport port |
 | `DATACORE_HTTP_HOST` | `127.0.0.1` | HTTP bind address |
 
+### config.yaml
+
+Create `config.yaml` in your Datacore directory (or `.datacore/config.yaml` in full mode):
+
+```yaml
+version: 2
+engrams:
+  auto_promote: false        # true: learn creates active engrams immediately
+packs:
+  trusted_publishers: []     # publisher IDs whose packs are flagged for auto-install
+search:
+  max_results: 20
+  snippet_length: 500        # chars around match
+hints:
+  enabled: true              # include _hints in tool responses for agent guidance
+```
+
+All fields have defaults -- the file is optional.
+
 ## HTTP Transport
 
 For remote or multi-client setups:
@@ -142,8 +226,9 @@ For remote or multi-client setups:
 DATACORE_HTTP_PORT=8080 datacore-mcp --http
 ```
 
-Health check: `GET /health`
-MCP endpoint: `POST /mcp`
+- MCP endpoint: `POST /mcp`
+- Health check: `GET /health`
+- Default bind: `127.0.0.1:3100`
 
 ## Module System (Full Mode)
 

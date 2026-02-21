@@ -7,6 +7,7 @@ import { handleLearn } from '../src/tools/learn.js'
 import { handleInject } from '../src/tools/inject-tool.js'
 import { handleFeedback } from '../src/tools/feedback.js'
 import { loadEngrams, saveEngrams } from '../src/engrams.js'
+import { loadConfig, resetConfigCache } from '../src/config.js'
 
 describe('learn -> inject -> feedback lifecycle', () => {
   const tmpDir = path.join(os.tmpdir(), 'lifecycle-test-' + Date.now())
@@ -14,10 +15,15 @@ describe('learn -> inject -> feedback lifecycle', () => {
   const packsDir = path.join(tmpDir, 'packs')
 
   beforeEach(() => {
+    resetConfigCache()
     fs.mkdirSync(packsDir, { recursive: true })
     fs.writeFileSync(engramsPath, 'engrams: []\n')
+    loadConfig(tmpDir, 'core')
   })
-  afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }))
+  afterEach(() => {
+    resetConfigCache()
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
 
   it('full cycle: learn, inject matches, feedback boosts', async () => {
     // 1. Learn creates an engram
@@ -52,8 +58,9 @@ describe('learn -> inject -> feedback lifecycle', () => {
       { engram_id: engramId, signal: 'positive' },
       engramsPath,
     )
-    expect(fbResult.success).toBe(true)
-    expect(fbResult.feedback_signals?.positive).toBe(1)
+    expect(fbResult.mode).toBe('single')
+    expect((fbResult as any).success).toBe(true)
+    expect((fbResult as any).feedback_signals?.positive).toBe(1)
   })
 
   it('decay reduces score for old engrams', async () => {

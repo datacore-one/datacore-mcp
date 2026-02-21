@@ -5,6 +5,8 @@ import { loadEngrams } from '../engrams.js'
 import { currentVersion } from '../version.js'
 import { decayedStrength, engramState } from '../decay.js'
 import { verifyPackChecksum } from '../trust.js'
+import { localDate } from './capture.js'
+import { buildHints } from '../hints.js'
 import registry from '../../registry/packs.json'
 
 interface StatusPaths {
@@ -27,6 +29,8 @@ interface StatusResult {
   knowledge_notes: number
   scaling_hint?: string
   update_available?: string
+  _recommendations?: string[]
+  _hints?: ReturnType<typeof buildHints>
 }
 
 export async function handleStatus(
@@ -57,7 +61,32 @@ export async function handleStatus(
     packIntegrity.push({ name: regPack.id, valid: result.valid })
   }
 
-  const result: StatusResult = {
+  // Build recommendations
+  const recommendations: string[] = []
+  const candidateCount = engrams.filter(e => e.status === 'candidate').length
+
+  if (healthCounts.retirement_candidate > 0) {
+    recommendations.push(`${healthCounts.retirement_candidate} engrams are retirement candidates. Use datacore.forget to clean up.`)
+  }
+  if (healthCounts.fading > 0) {
+    recommendations.push(`${healthCounts.fading} engrams are fading. Use datacore.feedback with positive signal to reinforce.`)
+  }
+  if (candidateCount > 0) {
+    recommendations.push(`${candidateCount} candidate engrams awaiting review. Use datacore.promote or enable engrams.auto_promote in config.yaml.`)
+  }
+
+  // Check for today's journal
+  const { date: today } = localDate()
+  const todayJournal = path.join(paths.journalPath, `${today}.md`)
+  if (!fs.existsSync(todayJournal)) {
+    recommendations.push('No journal entry today. Use datacore.capture to start one.')
+  }
+
+  if (updateAvailable) {
+    recommendations.push(`Update available: ${updateAvailable}. Run: npm update -g @datacore-one/mcp`)
+  }
+
+  const statusResult: StatusResult = {
     version: currentVersion,
     mode: paths.mode,
     engrams: engrams.length,
@@ -66,17 +95,24 @@ export async function handleStatus(
     pack_integrity: packIntegrity.length > 0 ? packIntegrity : undefined,
     journal_entries: journalCount,
     knowledge_notes: knowledgeCount,
+    _recommendations: recommendations.length > 0 ? recommendations : undefined,
+    _hints: buildHints({
+      next: recommendations.length > 0
+        ? recommendations[0]
+        : 'System healthy. Use datacore.session.start to begin working.',
+      related: ['datacore.promote', 'datacore.forget'],
+    }),
   }
 
   if (engrams.length >= 500) {
-    result.scaling_hint = `You have ${engrams.length} engrams. Consider migrating to full Datacore for SQLite-backed search.`
+    statusResult.scaling_hint = `You have ${engrams.length} engrams. Consider migrating to full Datacore for SQLite-backed search.`
   }
 
   if (updateAvailable) {
-    result.update_available = updateAvailable
+    statusResult.update_available = updateAvailable
   }
 
-  return result
+  return statusResult
 }
 
 function countFiles(dir: string, ext: string): number {

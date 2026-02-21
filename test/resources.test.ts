@@ -44,13 +44,14 @@ describe('MCP Resources', () => {
     expect(handlers.size).toBeGreaterThanOrEqual(2)
   })
 
-  it('lists static resources', async () => {
+  it('lists static resources including guide', async () => {
     const listHandler = [...handlers.values()][0]
     const result = await listHandler()
-    expect(result.resources).toHaveLength(3)
+    expect(result.resources).toHaveLength(4)
     expect(result.resources.map((r: any) => r.uri)).toContain('datacore://status')
     expect(result.resources.map((r: any) => r.uri)).toContain('datacore://engrams/active')
     expect(result.resources.map((r: any) => r.uri)).toContain('datacore://journal/today')
+    expect(result.resources.map((r: any) => r.uri)).toContain('datacore://guide')
   })
 
   it('lists resource templates', async () => {
@@ -73,6 +74,18 @@ describe('MCP Resources', () => {
     const engrams = JSON.parse(result.contents[0].text)
     expect(engrams).toHaveLength(1)
     expect(engrams[0].id).toBe('ENG-2026-0101-001')
+  })
+
+  it('reads agent guide resource', async () => {
+    const readHandler = [...handlers.values()][2]
+    const result = await readHandler({ params: { uri: 'datacore://guide' } })
+    const text = result.contents[0].text
+    expect(text).toContain('# Datacore Agent Guide')
+    expect(text).toContain('Session Lifecycle')
+    expect(text).toContain('Engram Lifecycle')
+    expect(text).toContain('session.start')
+    expect(text).toContain('promote')
+    expect(result.contents[0].mimeType).toBe('text/markdown')
   })
 
   it('reads journal entry by date', async () => {

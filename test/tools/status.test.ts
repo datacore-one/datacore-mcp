@@ -5,6 +5,7 @@ import * as path from 'path'
 import * as os from 'os'
 import * as yaml from 'js-yaml'
 import { handleStatus } from '../../src/tools/status.js'
+import { loadConfig, resetConfigCache } from '../../src/config.js'
 
 describe('datacore.status', () => {
   const tmpDir = path.join(os.tmpdir(), 'status-test-' + Date.now())
@@ -14,6 +15,7 @@ describe('datacore.status', () => {
   const packsPath = path.join(tmpDir, 'packs')
 
   beforeEach(() => {
+    resetConfigCache()
     fs.mkdirSync(journalPath, { recursive: true })
     fs.mkdirSync(knowledgePath, { recursive: true })
     fs.mkdirSync(packsPath, { recursive: true })
@@ -33,8 +35,12 @@ describe('datacore.status', () => {
 `)
     fs.writeFileSync(path.join(journalPath, '2026-02-19.md'), '# Today\n')
     fs.writeFileSync(path.join(knowledgePath, 'note.md'), '# Note\n')
+    loadConfig(tmpDir, 'core')
   })
-  afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }))
+  afterEach(() => {
+    resetConfigCache()
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
 
   it('returns counts for engrams, packs, journal, and knowledge', async () => {
     const result = await handleStatus({
@@ -62,5 +68,58 @@ describe('datacore.status', () => {
       mode: 'core', basePath: tmpDir,
     })
     expect(result.scaling_hint).toBeTruthy()
+  })
+
+  it('recommends journal when no entry today', async () => {
+    const result = await handleStatus({
+      engramsPath, journalPath, knowledgePath, packsPath,
+      mode: 'core', basePath: tmpDir,
+    })
+    // Unless test runs on 2026-02-19, there's no journal for today
+    const today = new Date().toLocaleDateString('en-CA')
+    if (today !== '2026-02-19') {
+      expect(result._recommendations).toBeDefined()
+      expect(result._recommendations!.some(r => r.includes('No journal entry today'))).toBe(true)
+    }
+  })
+
+  it('recommends promoting candidates', async () => {
+    fs.writeFileSync(engramsPath, `engrams:
+  - id: ENG-2026-0219-001
+    version: 2
+    status: candidate
+    type: behavioral
+    scope: global
+    visibility: private
+    statement: "Test candidate"
+    activation:
+      retrieval_strength: 0.5
+      storage_strength: 0.3
+      frequency: 0
+      last_accessed: "2026-02-19"
+`)
+    const result = await handleStatus({
+      engramsPath, journalPath, knowledgePath, packsPath,
+      mode: 'core', basePath: tmpDir,
+    })
+    expect(result._recommendations).toBeDefined()
+    expect(result._recommendations!.some(r => r.includes('candidate'))).toBe(true)
+  })
+
+  it('includes update recommendation when available', async () => {
+    const result = await handleStatus({
+      engramsPath, journalPath, knowledgePath, packsPath,
+      mode: 'core', basePath: tmpDir,
+    }, '2.0.0')
+    expect(result._recommendations!.some(r => r.includes('Update available: 2.0.0'))).toBe(true)
+  })
+
+  it('includes hints', async () => {
+    const result = await handleStatus({
+      engramsPath, journalPath, knowledgePath, packsPath,
+      mode: 'core', basePath: tmpDir,
+    })
+    expect(result._hints).toBeDefined()
+    expect(result._hints?.related).toContain('datacore.promote')
   })
 })

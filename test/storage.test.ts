@@ -97,4 +97,40 @@ describe('initCore', () => {
     expect(fs.existsSync(path.join(corePath, 'packs', 'datacore-starter-v1', 'SKILL.md'))).toBe(true)
     expect(fs.existsSync(path.join(corePath, 'packs', 'fds-principles-v1', 'SKILL.md'))).toBe(true)
   })
+
+  it('generates editor context files', () => {
+    const corePath = path.join(tmpDir, 'WithContext')
+    initCore(corePath)
+
+    // All four context files should exist
+    expect(fs.existsSync(path.join(corePath, 'CLAUDE.md'))).toBe(true)
+    expect(fs.existsSync(path.join(corePath, 'AGENTS.md'))).toBe(true)
+    expect(fs.existsSync(path.join(corePath, '.cursorrules'))).toBe(true)
+    expect(fs.existsSync(path.join(corePath, '.github', 'copilot-instructions.md'))).toBe(true)
+  })
+
+  it('context files contain session workflow', () => {
+    const corePath = path.join(tmpDir, 'ContextContent')
+    initCore(corePath)
+
+    const claude = fs.readFileSync(path.join(corePath, 'CLAUDE.md'), 'utf8')
+    expect(claude).toContain('session.start')
+    expect(claude).toContain('Engram Lifecycle')
+    expect(claude).toContain('datacore.')
+
+    const agents = fs.readFileSync(path.join(corePath, 'AGENTS.md'), 'utf8')
+    expect(agents).toContain('session.start')
+    expect(agents).toContain('Engram Lifecycle')
+  })
+
+  it('does not overwrite existing context files', () => {
+    const corePath = path.join(tmpDir, 'ExistingContext')
+    fs.mkdirSync(corePath, { recursive: true })
+    fs.writeFileSync(path.join(corePath, 'CLAUDE.md'), '# My custom context')
+
+    initCore(corePath)
+
+    const content = fs.readFileSync(path.join(corePath, 'CLAUDE.md'), 'utf8')
+    expect(content).toBe('# My custom context')
+  })
 })
