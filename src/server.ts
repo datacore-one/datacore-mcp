@@ -25,6 +25,7 @@ import {
 import { handleModulesList } from './tools/modules-list.js'
 import { handleModulesInfo } from './tools/modules-info.js'
 import { handleModulesHealth } from './tools/modules-health.js'
+import { handleForget } from './tools/forget.js'
 
 let storage: StorageConfig
 let updateAvailable: string | null = null
@@ -78,6 +79,7 @@ async function routeTool(name: string, args: Record<string, unknown>): Promise<u
       case 'datacore.search': return handleSearch(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath })
       case 'datacore.ingest': return handleIngest(validated, { knowledgePath: storage.knowledgePath, engramsPath: storage.engramsPath })
       case 'datacore.status': return handleStatus({ ...storage, engramsPath: storage.engramsPath, packsPath: storage.packsPath }, updateAvailable)
+      case 'datacore.forget': return handleForget(validated, storage.engramsPath)
       case 'datacore.discover': return handleDiscover(validated, storage.packsPath)
       case 'datacore.install': return handleInstall(validated, storage.packsPath)
       case 'datacore.modules.list': return handleModulesList(validated, storage)

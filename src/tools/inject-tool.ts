@@ -5,6 +5,7 @@ import type { Engram } from '../schemas/engram.js'
 
 interface InjectArgs {
   prompt: string
+  scope?: string
   max_tokens?: number
   min_relevance?: number
 }
@@ -24,6 +25,7 @@ export async function handleInject(
 
   const ctx: InjectionContext = {
     prompt: args.prompt,
+    scope: args.scope,
     maxTokens: args.max_tokens,
     minRelevance: args.min_relevance,
   }

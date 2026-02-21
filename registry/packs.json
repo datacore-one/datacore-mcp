@@ -22,6 +22,17 @@
       "download_url": "",
       "engram_count": 10,
       "free": true
+    },
+    {
+      "id": "dips-v1",
+      "name": "Datacore DIPs",
+      "description": "Comprehensive knowledge from all 20 Datacore Improvement Proposals",
+      "version": "1.0.0",
+      "author": "Datacore",
+      "tags": ["architecture", "patterns", "gtd", "modules", "knowledge-management"],
+      "download_url": "",
+      "engram_count": 747,
+      "free": true
     }
   ]
 }

@@ -29,6 +29,7 @@ export const TOOLS = [
     description: 'Get relevant engrams for a task — returns directives and considerations',
     inputSchema: z.object({
       prompt: z.string().describe('The task or question to match against'),
+      scope: z.string().optional().describe('Filter by scope: global | agent:X | module:X | command:X'),
       max_tokens: z.number().optional().describe('Token budget (default: 8000)'),
       min_relevance: z.number().optional().describe('Minimum score threshold (default: 0.3)'),
     }),
@@ -69,6 +70,14 @@ export const TOOLS = [
     description: 'Install or upgrade an engram pack',
     inputSchema: z.object({
       source: z.string().describe('Pack source: local path or pack ID from registry'),
+    }),
+  },
+  {
+    name: 'datacore.forget',
+    description: 'Retire an engram by ID or search term — marks it as retired so it is no longer injected',
+    inputSchema: z.object({
+      id: z.string().optional().describe('Exact engram ID to retire (e.g., ENG-2026-0219-001)'),
+      search: z.string().optional().describe('Search term to find engram by statement, tag, or ID fragment'),
     }),
   },
   {

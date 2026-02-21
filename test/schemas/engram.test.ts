@@ -66,6 +66,36 @@ describe('EngramSchema', () => {
     expect(() => EngramSchema.parse(engram)).not.toThrow()
   })
 
+  it('validates engrams with flexible ID formats', () => {
+    const base = {
+      version: 1, status: 'active', type: 'behavioral', scope: 'global',
+      statement: 'Test', activation: { retrieval_strength: 0.5, storage_strength: 0.5, frequency: 1, last_accessed: '2026-02-19' },
+    }
+    expect(() => EngramSchema.parse({ ...base, id: 'ENG-ROOT-001' })).not.toThrow()
+    expect(() => EngramSchema.parse({ ...base, id: 'ENG-DF-034' })).not.toThrow()
+    expect(() => EngramSchema.parse({ ...base, id: 'ENG-HIST-102' })).not.toThrow()
+    expect(() => EngramSchema.parse({ ...base, id: 'ENG-COR-025' })).not.toThrow()
+    expect(() => EngramSchema.parse({ ...base, id: 'ENG-2026-0219-001' })).not.toThrow()
+  })
+
+  it('validates version 1 engrams', () => {
+    const engram = {
+      id: 'ENG-ROOT-001', version: 1, status: 'active', type: 'procedural',
+      scope: 'global', statement: 'Test v1',
+      activation: { retrieval_strength: 0.7, storage_strength: 0.5, frequency: 3, last_accessed: '2026-02-19' },
+    }
+    expect(() => EngramSchema.parse(engram)).not.toThrow()
+  })
+
+  it('rejects engram with invalid ID format', () => {
+    const engram = {
+      id: 'INVALID-001', version: 2, status: 'active', type: 'behavioral',
+      scope: 'global', statement: 'Test',
+      activation: { retrieval_strength: 0.5, storage_strength: 0.5, frequency: 1, last_accessed: '2026-02-19' },
+    }
+    expect(() => EngramSchema.parse(engram)).toThrow()
+  })
+
   it('rejects engram with invalid status', () => {
     const engram = {
       id: 'ENG-2026-0219-003',

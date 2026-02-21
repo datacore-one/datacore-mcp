@@ -1,5 +1,5 @@
 // src/tools/modules-list.ts
-import { discoverModules, getModuleInfo } from '../modules.js'
+import { discoverModules } from '../modules.js'
 import type { StorageConfig } from '../storage.js'
 
 export async function handleModulesList(

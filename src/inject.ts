@@ -37,7 +37,7 @@ export function selectEngrams(
 
   for (const engram of personalEngrams) {
     if (engram.status !== 'active') continue
-    const score = scoreEngram(engram, promptLower, promptWords, [])
+    const score = scoreEngram(engram, promptLower, promptWords, [], ctx.scope)
     if (score > 0) scored.push({ engram, score })
   }
 
@@ -46,7 +46,7 @@ export function selectEngrams(
     const matchTerms = pack.manifest['x-datacore'].match_terms
     for (const engram of pack.engrams) {
       if (engram.status !== 'active') continue
-      const score = scoreEngram(engram, promptLower, promptWords, matchTerms)
+      const score = scoreEngram(engram, promptLower, promptWords, matchTerms, ctx.scope)
       if (score > 0) scored.push({ engram, score })
     }
   }
@@ -70,27 +70,55 @@ export function selectEngrams(
   }
 }
 
-function scoreEngram(engram: Engram, promptLower: string, promptWords: Set<string>, packMatchTerms: string[]): number {
+function scoreEngram(engram: Engram, promptLower: string, promptWords: Set<string>, packMatchTerms: string[], scopeFilter?: string): number {
+  // Scope filtering: if scope is specified, only include matching engrams
+  if (scopeFilter) {
+    if (scopeFilter === 'global') {
+      if (engram.scope !== 'global') return 0
+    } else if (!engram.scope.startsWith(scopeFilter) && engram.scope !== 'global') {
+      return 0
+    }
+  }
+
   let termHits = 0
 
+  // Pack match terms (highest weight — curated relevance signals)
   for (const term of packMatchTerms) {
     if (promptLower.includes(term.toLowerCase())) termHits++
   }
+  // Tag matches
   for (const tag of engram.tags) {
     if (promptWords.has(tag.toLowerCase())) termHits++
   }
+  // Domain hierarchy matches (each level counts)
   if (engram.domain) {
-    for (const part of engram.domain.split('.')) {
+    for (const part of engram.domain.split(/[./]/)) {
       if (promptWords.has(part.toLowerCase())) termHits++
     }
   }
+  // Statement keyword overlap (lower weight)
   const statementLower = engram.statement.toLowerCase()
   for (const word of promptWords) {
     if (statementLower.includes(word)) termHits += 0.5
   }
 
   if (termHits === 0) return 0
-  return termHits * engram.activation.retrieval_strength
+
+  // Base score from term hits * retrieval strength
+  let score = termHits * engram.activation.retrieval_strength
+
+  // Feedback signal boost: positive feedback increases score, negative decreases
+  const feedback = engram.feedback_signals
+  if (feedback) {
+    const netFeedback = feedback.positive - feedback.negative
+    if (netFeedback > 0) score *= 1 + Math.min(netFeedback * 0.05, 0.3)
+    else if (netFeedback < 0) score *= Math.max(1 + netFeedback * 0.1, 0.5)
+  }
+
+  // Consolidated engrams get a slight boost (survived reconsolidation)
+  if (engram.consolidated) score *= 1.1
+
+  return score
 }
 
 function fillTokenBudget(scored: ScoredEngram[], maxTokens: number): Engram[] {

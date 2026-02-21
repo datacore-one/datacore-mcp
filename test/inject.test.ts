@@ -99,4 +99,67 @@ describe('selectEngrams', () => {
     const result = selectEngrams(ctx, engrams, [])
     expect(result.directives[0].id).toBe('ENG-2026-0219-002')
   })
+
+  it('filters by scope=global', () => {
+    const ctx: InjectionContext = { prompt: 'data handling', scope: 'global' }
+    const engrams = [
+      makeEngram({ id: 'ENG-001', statement: 'Global rule', tags: ['data'], scope: 'global' }),
+      makeEngram({ id: 'ENG-002', statement: 'Agent rule', tags: ['data'], scope: 'agent:researcher' }),
+    ]
+    const result = selectEngrams(ctx, engrams, [])
+    const all = [...result.directives, ...result.consider]
+    expect(all).toHaveLength(1)
+    expect(all[0].id).toBe('ENG-001')
+  })
+
+  it('filters by scope prefix and includes global', () => {
+    const ctx: InjectionContext = { prompt: 'data handling', scope: 'agent:researcher' }
+    const engrams = [
+      makeEngram({ id: 'ENG-001', statement: 'Global rule', tags: ['data'], scope: 'global' }),
+      makeEngram({ id: 'ENG-002', statement: 'Agent rule', tags: ['data'], scope: 'agent:researcher' }),
+      makeEngram({ id: 'ENG-003', statement: 'Other agent rule', tags: ['data'], scope: 'agent:writer' }),
+    ]
+    const result = selectEngrams(ctx, engrams, [])
+    const all = [...result.directives, ...result.consider]
+    expect(all).toHaveLength(2)
+    const ids = all.map(e => e.id).sort()
+    expect(ids).toEqual(['ENG-001', 'ENG-002'])
+  })
+
+  it('boosts consolidated engrams', () => {
+    const ctx: InjectionContext = { prompt: 'data handling' }
+    const engrams = [
+      makeEngram({ id: 'ENG-001', statement: 'Not consolidated', tags: ['data'], consolidated: false,
+        activation: { retrieval_strength: 0.8, storage_strength: 0.5, frequency: 3, last_accessed: '2026-02-19' } }),
+      makeEngram({ id: 'ENG-002', statement: 'Consolidated', tags: ['data'], consolidated: true,
+        activation: { retrieval_strength: 0.8, storage_strength: 0.5, frequency: 3, last_accessed: '2026-02-19' } }),
+    ]
+    const result = selectEngrams(ctx, engrams, [])
+    // Consolidated should rank higher due to 1.1x boost
+    expect(result.directives[0].id).toBe('ENG-002')
+  })
+
+  it('boosts engrams with positive feedback', () => {
+    const ctx: InjectionContext = { prompt: 'data handling' }
+    const engrams = [
+      makeEngram({ id: 'ENG-001', statement: 'No feedback', tags: ['data'],
+        feedback_signals: { positive: 0, negative: 0, neutral: 0 } }),
+      makeEngram({ id: 'ENG-002', statement: 'Positive feedback', tags: ['data'],
+        feedback_signals: { positive: 5, negative: 0, neutral: 0 } }),
+    ]
+    const result = selectEngrams(ctx, engrams, [])
+    expect(result.directives[0].id).toBe('ENG-002')
+  })
+
+  it('penalizes engrams with negative feedback', () => {
+    const ctx: InjectionContext = { prompt: 'data handling' }
+    const engrams = [
+      makeEngram({ id: 'ENG-001', statement: 'No feedback', tags: ['data'],
+        feedback_signals: { positive: 0, negative: 0, neutral: 0 } }),
+      makeEngram({ id: 'ENG-002', statement: 'Negative feedback', tags: ['data'],
+        feedback_signals: { positive: 0, negative: 3, neutral: 0 } }),
+    ]
+    const result = selectEngrams(ctx, engrams, [])
+    expect(result.directives[0].id).toBe('ENG-001')
+  })
 })

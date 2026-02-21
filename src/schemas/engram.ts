@@ -34,8 +34,8 @@ export const FeedbackSignalsSchema = z.object({
 })
 
 export const EngramSchema = z.object({
-  id: z.string().regex(/^ENG-\d{4}-\d{4}-\d{3}$/),
-  version: z.literal(2),
+  id: z.string().regex(/^ENG-[A-Za-z0-9-]+$/),
+  version: z.number().int().min(1),
   status: z.enum(['active', 'dormant', 'retired', 'candidate']),
   consolidated: z.boolean().default(false),
 
