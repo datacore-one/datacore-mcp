@@ -12,7 +12,8 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "release": "npm test && npm run build && npm version ${VERSION:-patch} && npm publish --access public && npm install -g @datacore-one/mcp@$(node -p 'require(\"./package.json\").version')"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
