@@ -7,7 +7,7 @@ import { z } from 'zod'
 export const ConfigSchema = z.object({
   version: z.number().default(2),
   engrams: z.object({
-    auto_promote: z.boolean().default(false),
+    auto_promote: z.boolean().default(true),
   }).default({}),
   packs: z.object({
     trusted_publishers: z.array(z.string()).default([]),

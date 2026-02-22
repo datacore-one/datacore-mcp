@@ -85,22 +85,25 @@ const SESSION_GUIDE_FULL = `## Datacore Quick Start
 
 Datacore gives you persistent memory through **engrams** — knowledge that gets injected into context when relevant.
 
+### Use Proactively
+- **learn** — call when you discover patterns, preferences, or insights
+- **feedback** — rate injected engrams after session.start
+- **session.end** — call before conversation ends to capture what was learned
+
 ### Session Workflow
 1. **session.start** (you just called this) — get context
 2. Work on your task. Use **recall** to search everything, **search** for files.
 3. **feedback** — rate which injected engrams helped (strengthens useful ones)
 4. **session.end** — capture summary + suggest new engrams
 
-### Key Tools
-- **learn** — record a reusable insight (creates candidate engram)
-- **promote** — activate candidate engrams so they appear in future sessions
+### Other Tools
 - **capture** — write a journal entry or knowledge note
 - **ingest** — import text and extract engram suggestions
 - **status** — system health and actionable recommendations
 - **forget** — retire an engram you no longer need
 
 ### How Engrams Work
-learn → candidate → promote → active → inject → feedback → stronger/weaker
+learn → active → inject → feedback → stronger/weaker
 Positive feedback strengthens engrams. Unused ones naturally decay.`
 
 // Short reminder for returning users
