@@ -135,6 +135,14 @@ export function registerResources(server: Server, storage: StorageConfig): void 
 
 const AGENT_GUIDE = `# Datacore Agent Guide
 
+## Use Proactively
+
+Use Datacore tools automatically — do not wait to be asked:
+- **session.start**: Call at the beginning of every conversation
+- **learn**: Call when you discover patterns, preferences, insights, or corrections
+- **feedback**: Call after engrams are injected to rate usefulness
+- **session.end**: Call before the conversation ends
+
 ## Session Lifecycle
 1. datacore.session.start — Get relevant engrams + today's context
 2. Work on task, use datacore.recall or datacore.search as needed
@@ -142,11 +150,11 @@ const AGENT_GUIDE = `# Datacore Agent Guide
 4. datacore.session.end — Capture summary + engram suggestions
 
 ## Engram Lifecycle
-- datacore.learn creates candidate engrams (or active if auto_promote enabled)
-- datacore.promote activates candidates so they appear in inject results
+- datacore.learn creates active engrams (immediately available for injection)
 - datacore.feedback with positive signals strengthens injection priority
 - datacore.forget retires engrams permanently
 - Unused engrams naturally decay over time
+- datacore.promote activates candidate engrams (when auto_promote is disabled)
 
 ## Quick Reference
 | Tool | Purpose |
@@ -154,7 +162,6 @@ const AGENT_GUIDE = `# Datacore Agent Guide
 | session.start | Begin session with context injection |
 | session.end | End session with journal + engrams |
 | learn | Create engram from knowledge statement |
-| promote | Activate candidate engrams |
 | inject | Get relevant engrams for specific task |
 | recall | Search all sources (engrams + journal + knowledge) |
 | capture | Write journal entry or knowledge note |
@@ -166,6 +173,7 @@ const AGENT_GUIDE = `# Datacore Agent Guide
 | packs.discover | Browse available engram packs |
 | packs.install | Install or upgrade a pack |
 | packs.export | Export engrams as shareable pack |
+| promote | Activate candidate engrams (when auto_promote disabled) |
 `
 
 export function notifyEngramsChanged(server: Server): void {

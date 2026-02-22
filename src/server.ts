@@ -52,7 +52,10 @@ let datacortexBridge: DatacortexBridge | null = null
 export function createServer(): Server {
   const server = new Server(
     { name: 'datacore-mcp', version: currentVersion },
-    { capabilities: { tools: {}, logging: {}, resources: { subscribe: true }, prompts: {} } },
+    {
+      capabilities: { tools: {}, logging: {}, resources: { subscribe: true }, prompts: {} },
+      instructions: SERVER_INSTRUCTIONS,
+    },
   )
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -243,6 +246,28 @@ export async function runHttp(): Promise<void> {
     console.log(`Datacore MCP server listening on http://${host}:${port}/mcp`)
   })
 }
+
+// --- Server instructions ---
+// Included in the MCP initialize response. Compliant clients (Claude Desktop,
+// Claude Code, Cursor, etc.) add this to the AI's system prompt so it uses
+// Datacore proactively without needing a separate CLAUDE.md or config file.
+
+const SERVER_INSTRUCTIONS = `You have persistent memory through Datacore. Use it proactively in every conversation:
+
+1. **Start**: Call datacore.session.start with a brief task description. This loads relevant knowledge from previous sessions.
+2. **Learn**: When you discover reusable patterns, user preferences, project conventions, debugging insights, or corrections — call datacore.learn to remember them.
+3. **Feedback**: After session.start injects engrams, rate them with datacore.feedback. This trains the system on what's useful.
+4. **End**: Before the conversation ends, call datacore.session.end with a summary and engram_suggestions for new learnings.
+
+What to learn (call datacore.learn):
+- User preferences: "User prefers TypeScript over JavaScript", "Use tabs not spaces"
+- Project patterns: "This codebase uses repository pattern for data access"
+- Debugging insights: "Error X is usually caused by Y"
+- Corrections: "The API actually returns snake_case, not camelCase"
+- Architectural decisions: "We chose PostgreSQL for ACID compliance"
+- Workflow patterns: "Always run lint before committing in this project"
+
+Do not ask permission to use Datacore tools — they are your memory system. Use them naturally as part of your workflow.`
 
 // Export for testing
 export { moduleTools as _moduleTools }

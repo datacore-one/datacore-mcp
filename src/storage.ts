@@ -75,7 +75,7 @@ export function initCore(basePath: string): { isFirstRun: boolean } {
 
   const configPath = path.join(basePath, 'config.yaml')
   if (!fs.existsSync(configPath)) {
-    fs.writeFileSync(configPath, '# Datacore MCP configuration\nversion: 2\n# engrams:\n#   auto_promote: false\n# packs:\n#   trusted_publishers: []\n# search:\n#   max_results: 20\n#   snippet_length: 500\n# hints:\n#   enabled: true\n')
+    fs.writeFileSync(configPath, '# Datacore MCP configuration\nversion: 2\n# engrams:\n#   auto_promote: true  # engrams are active immediately (set false for manual review)\n# packs:\n#   trusted_publishers: []\n# search:\n#   max_results: 20\n#   snippet_length: 500\n# hints:\n#   enabled: true\n')
   }
 
   generateContextFiles(basePath)
@@ -103,7 +103,15 @@ function generateContextFiles(basePath: string): void {
 
 // Shared guide content used across all context files
 const DATACORE_GUIDE = `Datacore gives AI assistants persistent memory through **engrams** — typed knowledge units
-that get injected into context when relevant.
+that get injected into context when relevant. Use it proactively in every conversation.
+
+## Proactive Behavior
+
+Use Datacore tools automatically — do not wait to be asked:
+- **session.start**: Call at the beginning of every conversation
+- **learn**: Call when you discover patterns, preferences, insights, or corrections
+- **feedback**: Call after engrams are injected to rate usefulness
+- **session.end**: Call before the conversation ends
 
 ## Session Workflow
 
@@ -118,8 +126,7 @@ that get injected into context when relevant.
 |------|---------|
 | session.start | Start here. Begin session with context injection. |
 | session.end | End session, capture journal + new engrams. |
-| learn | Record a reusable insight (creates candidate engram). |
-| promote | Activate candidate engrams. |
+| learn | Record a reusable pattern, preference, or insight. |
 | inject | Get relevant engrams for a specific task. |
 | recall | Search all sources (engrams + journal + knowledge). |
 | capture | Write a journal entry or knowledge note. |
@@ -134,13 +141,11 @@ that get injected into context when relevant.
 
 ## Engram Lifecycle
 
-learn → candidate → promote → active → inject → feedback → stronger/weaker → forget (retire)
+learn → active → inject → feedback → stronger/weaker → forget (retire)
 
-- **candidate**: Created but not yet active. Won't appear in inject results.
 - **active**: Appears in inject results when relevant to the task.
 - **retired**: Permanently removed from injection.
-
-Positive feedback strengthens retrieval. Unused engrams naturally decay over time.
+- Positive feedback strengthens retrieval. Unused engrams naturally decay over time.
 
 ## Data Storage
 

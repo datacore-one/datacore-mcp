@@ -84,6 +84,14 @@ Engrams that prove useful get reinforced over time. Unused ones naturally decay.
 
 Datacore gives you persistent memory through **engrams** — typed knowledge units that get injected into context when relevant. You learn patterns, remember preferences, and build on previous work across sessions.
 
+## Use Proactively
+
+Use Datacore tools automatically — do not wait to be asked:
+- **session.start**: Call at the beginning of every conversation
+- **learn**: Call when you discover patterns, preferences, insights, or corrections
+- **feedback**: Call after engrams are injected to rate usefulness
+- **session.end**: Call before the conversation ends
+
 ## Core Concepts
 
 **Engrams** are reusable knowledge: "Always validate input at API boundaries", "User prefers tabs over spaces". They have activation dynamics — frequently useful ones get stronger, unused ones decay.
@@ -113,8 +121,7 @@ Every session follows this pattern:
 | Tool | What it does |
 |------|-------------|
 | **capture** | Write a journal entry or knowledge note |
-| **learn** | Create an engram (starts as candidate) |
-| **promote** | Activate candidate engrams |
+| **learn** | Create an engram (immediately active) |
 | **inject** | Get relevant engrams for a specific task |
 | **recall** | Search everything (engrams + journal + knowledge) |
 | **search** | Search journal and knowledge files |
@@ -126,6 +133,7 @@ Every session follows this pattern:
 |------|-------------|
 | **feedback** | Rate engrams: positive/negative/neutral (single or batch) |
 | **forget** | Retire an engram permanently |
+| **promote** | Activate candidate engrams (when auto_promote disabled) |
 
 ### Packs (Shareable Knowledge)
 | Tool | What it does |
@@ -137,12 +145,10 @@ Every session follows this pattern:
 ## Engram Lifecycle
 
 \`\`\`
-learn → candidate → promote → active → inject → feedback → stronger/weaker
-                                                          → forget (retire)
+learn → active → inject → feedback → stronger/weaker → forget (retire)
 \`\`\`
 
-- **candidate**: Created but not yet active. Won't appear in inject results.
-- **active**: Appears in inject results when relevant.
+- **active**: Appears in inject results when relevant. Created directly by learn.
 - **retired**: Permanently removed from injection.
 
 Feedback matters: positive signals increase retrieval strength, negative signals decrease it. Engrams that are never accessed naturally decay over time.
@@ -151,6 +157,7 @@ Feedback matters: positive signals increase retrieval strength, negative signals
 
 - Start every session with **session.start** — it gives you relevant context
 - End every session with **session.end** — it captures what you learned
+- Call **learn** proactively when you discover patterns or preferences
 - Use **feedback** after getting injected engrams — this is how Datacore learns what's useful
 - Use **recall** for broad searches across all sources, **search** for targeted file searches
 - Check **status** periodically — it shows actionable recommendations`,

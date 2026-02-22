@@ -44,7 +44,7 @@ describe('datacore.session.end', () => {
     expect(fs.existsSync(result.journal_path!)).toBe(true)
   })
 
-  it('creates engrams from suggestions', async () => {
+  it('creates active engrams from suggestions by default (auto_promote)', async () => {
     const result = await handleSessionEnd({
       summary: 'Session summary',
       engram_suggestions: [
@@ -55,11 +55,11 @@ describe('datacore.session.end', () => {
     expect(result.engrams_created).toBe(2)
     const engrams = loadEngrams(engramsPath)
     expect(engrams).toHaveLength(2)
-    expect(engrams[0].status).toBe('candidate')
+    expect(engrams[0].status).toBe('active')
   })
 
-  it('creates active engrams when auto_promote is on', async () => {
-    fs.writeFileSync(path.join(tmpDir, 'config.yaml'), 'engrams:\n  auto_promote: true\n')
+  it('creates candidate engrams when auto_promote is off', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'config.yaml'), 'engrams:\n  auto_promote: false\n')
     loadConfig(tmpDir, 'core')
 
     const result = await handleSessionEnd({
@@ -67,7 +67,7 @@ describe('datacore.session.end', () => {
       engram_suggestions: [{ statement: 'Test assertion' }],
     }, storage)
     expect(result.engrams_created).toBe(1)
-    expect(result._hints?.next).toContain('active')
+    expect(result._hints?.next).toContain('candidates')
   })
 
   it('includes hints about session capture', async () => {

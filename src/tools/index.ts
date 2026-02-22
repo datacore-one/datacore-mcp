@@ -4,7 +4,7 @@ import { z } from 'zod'
 export const TOOLS = [
   {
     name: 'datacore.capture',
-    description: 'Capture a journal entry or knowledge note',
+    description: 'Capture a journal entry or knowledge note. Call proactively to record important decisions, meeting outcomes, and significant events.',
     inputSchema: z.object({
       type: z.enum(['journal', 'knowledge']),
       content: z.string().describe('Content to capture'),
@@ -14,7 +14,7 @@ export const TOOLS = [
   },
   {
     name: 'datacore.learn',
-    description: 'Create an engram from a statement — record a reusable learning',
+    description: 'Create an engram from a statement — record a reusable learning. Call proactively when you discover patterns, user preferences, project conventions, debugging insights, or corrections worth remembering across sessions.',
     inputSchema: z.object({
       statement: z.string().describe('The knowledge assertion'),
       type: z.enum(['behavioral', 'terminological', 'procedural', 'architectural']).optional(),
@@ -26,7 +26,7 @@ export const TOOLS = [
   },
   {
     name: 'datacore.inject',
-    description: 'Get relevant engrams for a task — returns directives and considerations',
+    description: 'Get relevant engrams for a task — returns directives and considerations. Called automatically by session.start; call directly for mid-session context on a new topic.',
     inputSchema: z.object({
       prompt: z.string().describe('The task or question to match against'),
       scope: z.string().optional().describe('Filter by scope: global | agent:X | module:X | command:X'),
@@ -83,7 +83,7 @@ export const TOOLS = [
   },
   {
     name: 'datacore.feedback',
-    description: 'Signal whether an injected engram was helpful (positive), unhelpful (negative), or seen but not acted on (neutral). Supports single or batch mode.',
+    description: 'Signal whether an injected engram was helpful (positive), unhelpful (negative), or seen but not acted on (neutral). Always call after session.start injects engrams — this trains the system. Supports single or batch mode.',
     inputSchema: z.object({
       engram_id: z.string().optional().describe('The engram ID to provide feedback on (single mode)'),
       signal: z.enum(['positive', 'negative', 'neutral']).optional().describe('Feedback signal (single mode)'),
@@ -118,7 +118,7 @@ export const TOOLS = [
   },
   {
     name: 'datacore.session.end',
-    description: 'End a session — captures journal summary and creates engrams from suggestions',
+    description: 'End a session — captures journal summary and creates engrams from suggestions. Call before the conversation ends to preserve what was learned.',
     inputSchema: z.object({
       summary: z.string().describe('Session summary for the journal'),
       tags: z.array(z.string()).optional().describe('Tags for the journal entry'),

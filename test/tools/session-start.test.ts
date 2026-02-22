@@ -92,7 +92,7 @@ describe('datacore.session.start', () => {
     const result = await handleSessionStart({}, storage)
     expect(result.guide).toContain('Quick Start')
     expect(result.guide).toContain('Session Workflow')
-    expect(result.guide).toContain('Key Tools')
+    expect(result.guide).toContain('Use Proactively')
     expect(result.guide).toContain('How Engrams Work')
   })
 

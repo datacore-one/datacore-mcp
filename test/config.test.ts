@@ -20,7 +20,7 @@ describe('config', () => {
   it('returns defaults when no config file exists', () => {
     const config = loadConfig(tmpDir, 'core')
     expect(config.version).toBe(2)
-    expect(config.engrams.auto_promote).toBe(false)
+    expect(config.engrams.auto_promote).toBe(true)
     expect(config.packs.trusted_publishers).toEqual([])
     expect(config.search.max_results).toBe(20)
     expect(config.search.snippet_length).toBe(500)
