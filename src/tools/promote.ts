@@ -2,6 +2,7 @@
 import { loadEngrams } from '../engrams.js'
 import { atomicWriteYaml } from './inject-tool.js'
 import { buildHints } from '../hints.js'
+import type { EngagementService } from '../engagement/index.js'
 
 interface PromoteArgs {
   id?: string
@@ -28,6 +29,7 @@ interface PromoteResult {
 export async function handlePromote(
   args: PromoteArgs,
   engramsPath: string,
+  service?: EngagementService,
 ): Promise<PromoteResult> {
   const targetIds = args.ids ?? (args.id ? [args.id] : [])
 
@@ -72,6 +74,15 @@ export async function handlePromote(
 
   if (promoted.length > 0) {
     atomicWriteYaml(engramsPath, { engrams })
+
+    // Engagement XP
+    if (service?.isEnabled()) {
+      try {
+        for (const _ of promoted) {
+          await service.award('engram_promoted', {})
+        }
+      } catch { /* never break core */ }
+    }
   }
 
   return {

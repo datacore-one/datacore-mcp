@@ -5,6 +5,7 @@ import * as path from 'path'
 import { loadEngrams, loadAllPacks, type LoadedPack } from '../engrams.js'
 import { atomicWriteYaml } from './inject-tool.js'
 import { buildHints } from '../hints.js'
+import type { EngagementService } from '../engagement/index.js'
 
 type Signal = 'positive' | 'negative' | 'neutral'
 
@@ -68,14 +69,15 @@ export async function handleFeedback(
   args: FeedbackArgs,
   engramsPath: string,
   packsPath?: string,
+  service?: EngagementService,
 ): Promise<SingleFeedbackResult | BatchFeedbackResult> {
   const pPath = packsPath ?? path.join(path.dirname(engramsPath), 'packs')
 
   if (args.signals && args.signals.length > 0) {
-    return handleBatchFeedback(args.signals, engramsPath, pPath)
+    return handleBatchFeedback(args.signals, engramsPath, pPath, service)
   }
 
-  return handleSingleFeedback(args.engram_id!, args.signal!, args.comment, engramsPath, pPath)
+  return handleSingleFeedback(args.engram_id!, args.signal!, args.comment, engramsPath, pPath, service)
 }
 
 async function handleSingleFeedback(
@@ -84,6 +86,7 @@ async function handleSingleFeedback(
   comment: string | undefined,
   engramsPath: string,
   packsPath: string,
+  service?: EngagementService,
 ): Promise<SingleFeedbackResult> {
   const found = findEngram(engram_id, engramsPath, packsPath)
 
@@ -115,6 +118,11 @@ async function handleSingleFeedback(
     atomicWriteYaml(found.packEngramsPath, { engrams: found.packEngrams })
   }
 
+  // Engagement XP
+  if (service?.isEnabled()) {
+    try { await service.award('feedback_given', { signal }) } catch { /* never break core */ }
+  }
+
   return {
     mode: 'single',
     success: true,
@@ -129,6 +137,7 @@ async function handleBatchFeedback(
   signals: Array<{ engram_id: string; signal: Signal }>,
   engramsPath: string,
   packsPath: string,
+  service?: EngagementService,
 ): Promise<BatchFeedbackResult> {
   const today = new Date().toISOString().split('T')[0]
   const results: Array<{ engram_id: string; signal: string; success: boolean; source?: 'personal' | 'pack'; error?: string }> = []
@@ -187,6 +196,16 @@ async function handleBatchFeedback(
   }
   for (const [filePath, engrams] of dirtyPackFiles) {
     atomicWriteYaml(filePath, { engrams })
+  }
+
+  // Engagement XP — one award per feedback signal
+  if (service?.isEnabled()) {
+    try {
+      const successCount = results.filter(r => r.success).length
+      for (let i = 0; i < successCount; i++) {
+        await service.award('feedback_given', { batch: true })
+      }
+    } catch { /* never break core */ }
   }
 
   return {

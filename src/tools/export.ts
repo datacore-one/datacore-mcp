@@ -4,6 +4,7 @@ import * as path from 'path'
 import * as yaml from 'js-yaml'
 import { loadEngrams } from '../engrams.js'
 import type { Engram } from '../schemas/engram.js'
+import type { EngagementService } from '../engagement/index.js'
 
 interface ExportArgs {
   name: string
@@ -28,6 +29,7 @@ interface ExportResult {
 export async function handleExport(
   args: ExportArgs,
   paths: { engramsPath: string; packsPath: string },
+  service?: EngagementService,
 ): Promise<ExportResult> {
   const allEngrams = loadEngrams(paths.engramsPath)
   let selected = allEngrams.filter(e => e.status === 'active')
@@ -143,6 +145,13 @@ Exported ${selected.length} engrams.
     path.join(packDir, 'engrams.yaml'),
     yaml.dump({ engrams: exportEngrams }, { lineWidth: 120, noRefs: true, quotingType: '"' }),
   )
+
+  // Engagement XP (quality gate: 5+ engrams)
+  if (service?.isEnabled() && selected.length >= 5) {
+    try {
+      await service.award('pack_exported', { engram_count: selected.length, avg_fitness: 0.7 })
+    } catch { /* never break core */ }
+  }
 
   return { success: true, pack_path: packDir }
 }

@@ -7,7 +7,9 @@ import { decayedStrength, engramState } from '../decay.js'
 import { verifyPackChecksum } from '../trust.js'
 import { localDate } from './capture.js'
 import { buildHints } from '../hints.js'
+import { formatStatus } from '../engagement/format.js'
 import registry from '../../registry/packs.json'
+import type { EngagementService } from '../engagement/index.js'
 
 interface StatusPaths {
   engramsPath: string
@@ -29,6 +31,7 @@ interface StatusResult {
   knowledge_notes: number
   scaling_hint?: string
   update_available?: string
+  engagement?: { display: string; tier: string; xp: number; reputation: number }
   _recommendations?: string[]
   _hints?: ReturnType<typeof buildHints>
 }
@@ -36,6 +39,7 @@ interface StatusResult {
 export async function handleStatus(
   paths: StatusPaths,
   updateAvailable?: string | null,
+  engagementService?: EngagementService,
 ): Promise<StatusResult> {
   const engrams = loadEngrams(paths.engramsPath)
   const journalCount = countFiles(paths.journalPath, '.md')
@@ -86,6 +90,23 @@ export async function handleStatus(
     recommendations.push(`Update available: ${updateAvailable}. Run: npm update -g @datacore-one/mcp`)
   }
 
+  // Engagement dashboard
+  let engagement: StatusResult['engagement'] = undefined
+  if (engagementService?.isEnabled()) {
+    try {
+      await engagementService.init()
+      const profile = engagementService.getProfile()
+      if (profile) {
+        engagement = {
+          display: formatStatus(profile),
+          tier: profile.tier.current,
+          xp: profile.xp.total,
+          reputation: profile.reputation.score,
+        }
+      }
+    } catch { /* engagement never breaks core tools */ }
+  }
+
   const statusResult: StatusResult = {
     version: currentVersion,
     mode: paths.mode,
@@ -95,6 +116,7 @@ export async function handleStatus(
     pack_integrity: packIntegrity.length > 0 ? packIntegrity : undefined,
     journal_entries: journalCount,
     knowledge_notes: knowledgeCount,
+    engagement,
     _recommendations: recommendations.length > 0 ? recommendations : undefined,
     _hints: buildHints({
       next: recommendations.length > 0

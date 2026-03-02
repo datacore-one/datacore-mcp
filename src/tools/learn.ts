@@ -3,6 +3,7 @@ import { loadEngrams, saveEngrams } from '../engrams.js'
 import { getConfig } from '../config.js'
 import { buildHints } from '../hints.js'
 import type { Engram } from '../schemas/engram.js'
+import type { EngagementService } from '../engagement/index.js'
 
 interface LearnArgs {
   statement: string
@@ -17,6 +18,7 @@ interface LearnArgs {
 interface LearnResult {
   success: boolean
   engram: Engram
+  xp?: { earned: number; action: string } | null
   _hints?: ReturnType<typeof buildHints>
 }
 
@@ -39,7 +41,7 @@ export function generateEngramId(existingEngrams: Engram[]): string {
   return `${prefix}${String(nextSeq).padStart(padWidth, '0')}`
 }
 
-export async function handleLearn(args: LearnArgs, engramsPath: string): Promise<LearnResult> {
+export async function handleLearn(args: LearnArgs, engramsPath: string, service?: EngagementService): Promise<LearnResult> {
   const engrams = loadEngrams(engramsPath)
   const today = new Date().toISOString().split('T')[0]
   const autoPromote = getConfig().engrams.auto_promote
@@ -71,6 +73,32 @@ export async function handleLearn(args: LearnArgs, engramsPath: string): Promise
   engrams.push(engram)
   saveEngrams(engramsPath, engrams)
 
+  // Engagement XP
+  let xp: LearnResult['xp'] = undefined
+  if (service?.isEnabled()) {
+    try {
+      const isPublic = engram.visibility === 'public' || engram.visibility === 'template'
+      const actionKey = isPublic ? 'engram_created_public' : 'engram_created'
+      const result = await service.award(actionKey, { visibility: engram.visibility })
+      if (result) {
+        xp = { earned: result.event.xp_earned, action: actionKey }
+      }
+
+      // Check for new domain bonus
+      if (engram.domain) {
+        const existingDomains = new Set(
+          engrams.slice(0, -1).filter(e => e.domain).map(e => e.domain!)
+        )
+        if (!existingDomains.has(engram.domain)) {
+          const domainResult = await service.award('new_domain', { domain: engram.domain })
+          if (domainResult && xp) {
+            xp.earned += domainResult.event.xp_earned
+          }
+        }
+      }
+    } catch { /* engagement never breaks core tools */ }
+  }
+
   const statusLabel = autoPromote ? 'active' : 'candidate'
   const hints = autoPromote
     ? buildHints({
@@ -83,5 +111,5 @@ export async function handleLearn(args: LearnArgs, engramsPath: string): Promise
         related: ['datacore.promote', 'datacore.inject'],
       })
 
-  return { success: true, engram, _hints: hints }
+  return { success: true, engram, xp, _hints: hints }
 }

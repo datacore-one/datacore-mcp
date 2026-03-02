@@ -19,6 +19,10 @@ export const ConfigSchema = z.object({
   hints: z.object({
     enabled: z.boolean().default(true),
   }).default({}),
+  engagement: z.object({
+    enabled: z.boolean().default(true),
+    inline_xp: z.boolean().default(false),
+  }).default({}),
 })
 
 export type DatacoreConfig = z.infer<typeof ConfigSchema>

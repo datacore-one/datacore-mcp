@@ -34,10 +34,13 @@ import { handleSessionStart } from './tools/session-start.js'
 import { handleSessionEnd } from './tools/session-end.js'
 import { handleRecall } from './tools/recall.js'
 import { handlePromote } from './tools/promote.js'
+import { handleResolve } from './tools/resolve.js'
 import { logger } from './logger.js'
 import { registerResources, notifyEngramsChanged } from './resources.js'
 import { registerPrompts } from './prompts.js'
 import { DatacortexBridge } from './datacortex.js'
+import { EngagementService } from './engagement/index.js'
+import { getConfig } from './config.js'
 
 let storage: StorageConfig
 let updateAvailable: string | null = null
@@ -46,6 +49,15 @@ let discoveredModules: DiscoveredModule[] = []
 let isFirstRun = false
 let serverRef: Server | null = null
 let datacortexBridge: DatacortexBridge | null = null
+let engagementService: EngagementService | null = null
+
+function getEngagementService(): EngagementService {
+  if (!engagementService || engagementService.basePath !== storage.basePath) {
+    const config = getConfig()
+    engagementService = new EngagementService(storage.basePath, config.engagement)
+  }
+  return engagementService
+}
 
 // --- Server creation ---
 
@@ -106,7 +118,7 @@ export function createServer(): Server {
 
 // --- Tool routing ---
 
-const ENGRAM_MUTATING_TOOLS = new Set(['datacore.learn', 'datacore.forget', 'datacore.feedback', 'datacore.session.end', 'datacore.promote'])
+const ENGRAM_MUTATING_TOOLS = new Set(['datacore.learn', 'datacore.forget', 'datacore.feedback', 'datacore.session.end', 'datacore.promote', 'datacore.resolve'])
 
 async function routeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   const coreTool = TOOLS.find(t => t.name === name)
@@ -115,20 +127,21 @@ async function routeTool(name: string, args: Record<string, unknown>): Promise<u
     let result: unknown
     switch (name) {
       case 'datacore.capture': result = await handleCapture(validated, storage); break
-      case 'datacore.learn': result = await handleLearn(validated, storage.engramsPath); break
+      case 'datacore.learn': result = await handleLearn(validated, storage.engramsPath, getEngagementService()); break
       case 'datacore.inject': result = await handleInject(validated, { engramsPath: storage.engramsPath, packsPath: storage.packsPath }); break
       case 'datacore.search': result = await handleSearch(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath }, datacortexBridge); break
       case 'datacore.ingest': result = await handleIngest(validated, { knowledgePath: storage.knowledgePath, engramsPath: storage.engramsPath }); break
-      case 'datacore.status': result = await handleStatus({ ...storage, engramsPath: storage.engramsPath, packsPath: storage.packsPath }, updateAvailable); break
-      case 'datacore.forget': result = await handleForget(validated, storage.engramsPath); break
-      case 'datacore.feedback': result = await handleFeedback(validated, storage.engramsPath, storage.packsPath); break
-      case 'datacore.session.start': result = await handleSessionStart(validated, storage, datacortexBridge); break
-      case 'datacore.session.end': result = await handleSessionEnd(validated, storage); break
+      case 'datacore.status': result = await handleStatus({ ...storage, engramsPath: storage.engramsPath, packsPath: storage.packsPath }, updateAvailable, getEngagementService()); break
+      case 'datacore.forget': result = await handleForget(validated, storage.engramsPath, getEngagementService()); break
+      case 'datacore.feedback': result = await handleFeedback(validated, storage.engramsPath, storage.packsPath, getEngagementService()); break
+      case 'datacore.session.start': result = await handleSessionStart(validated, storage, datacortexBridge, getEngagementService()); break
+      case 'datacore.session.end': result = await handleSessionEnd(validated, storage, getEngagementService()); break
       case 'datacore.recall': result = await handleRecall(validated, { engramsPath: storage.engramsPath, journalPath: storage.journalPath, knowledgePath: storage.knowledgePath }, datacortexBridge); break
-      case 'datacore.promote': result = await handlePromote(validated, storage.engramsPath); break
+      case 'datacore.promote': result = await handlePromote(validated, storage.engramsPath, getEngagementService()); break
       case 'datacore.packs.discover': result = handleDiscover(validated, storage.packsPath); break
       case 'datacore.packs.install': result = await handleInstall(validated, storage.packsPath); break
-      case 'datacore.packs.export': result = await handleExport(validated as any, { engramsPath: storage.engramsPath, packsPath: storage.packsPath }); break
+      case 'datacore.packs.export': result = await handleExport(validated as any, { engramsPath: storage.engramsPath, packsPath: storage.packsPath }, getEngagementService()); break
+      case 'datacore.resolve': result = await handleResolve(validated as any, storage.engramsPath, getEngagementService()); break
       case 'datacore.modules.list': result = await handleModulesList(validated, storage, discoveredModules); break
       case 'datacore.modules.info': result = await handleModulesInfo(validated as { module: string }, storage, discoveredModules); break
       case 'datacore.modules.health': result = await handleModulesHealth(validated as { module?: string }, storage, discoveredModules); break

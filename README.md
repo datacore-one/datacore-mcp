@@ -86,7 +86,7 @@ Mode is auto-detected. If you have a full [Datacore](https://github.com/datacore
 
 Override with environment variables: `DATACORE_PATH` (full) or `DATACORE_CORE_PATH` (core).
 
-## Tools (17 core + 3 full-mode)
+## Tools (18 core + 3 full-mode)
 
 ### Session
 
@@ -114,6 +114,7 @@ Override with environment variables: `DATACORE_PATH` (full) or `DATACORE_CORE_PA
 | `datacore.promote` | Activate candidate engrams |
 | `datacore.feedback` | Signal whether engrams were helpful (single or batch) |
 | `datacore.forget` | Retire an engram by ID or search |
+| `datacore.resolve` | Resolve engagement events (reconsolidations, discoveries, challenges) |
 
 ### Packs
 
@@ -184,6 +185,28 @@ datacore.packs.export    -- export your engrams as a pack
 
 Bundled starter packs are installed automatically on first run.
 
+## Engagement System
+
+Datacore includes an optional engagement layer that tracks your AI's learning progress through XP, tiers, and gameplay mechanics. Enable it in `config.yaml`:
+
+```yaml
+engagement:
+  enabled: true
+  inline_xp: false   # show XP gains inline in tool responses
+```
+
+When enabled, you earn XP for learning actions (creating engrams, giving feedback, reviewing contradictions). The system surfaces:
+
+- **Reconsolidations** — detects contradictions between engrams and prompts you to defend, revise, or retire
+- **Discoveries** — finds unexpected connections across knowledge domains
+- **Challenges** — weekly goals that reward consistent usage
+
+Progress is visible in `datacore.session.start` and `datacore.status`. Use `datacore.resolve` to act on reconsolidations, discoveries, and challenges.
+
+Tiers: Seed (0 XP) -> Cipher (100) -> Sage (500) -> Adept (1200) -> Visionary (2500) -> Oracle (5000).
+
+All engagement is gated behind `engagement.enabled` — when disabled, behavior is identical to v1.2.
+
 ## Configuration
 
 ### Environment Variables
@@ -214,6 +237,9 @@ search:
   snippet_length: 500        # chars around match
 hints:
   enabled: true              # include _hints in tool responses for agent guidance
+engagement:
+  enabled: true              # enable XP, tiers, and gameplay mechanics
+  inline_xp: false           # show XP gains inline in tool responses
 ```
 
 All fields have defaults -- the file is optional.

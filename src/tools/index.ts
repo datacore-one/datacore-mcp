@@ -166,4 +166,14 @@ export const TOOLS = [
       module: z.string().optional().describe('Module name (omit for all modules)'),
     }),
   },
+  {
+    name: 'datacore.resolve',
+    description: 'Resolve a pending engagement event: reconsolidation (contradiction challenge), discovery (cross-domain insight), or challenge (weekly goal). The agent presents options to the user and calls this with their choice.',
+    inputSchema: z.object({
+      type: z.enum(['reconsolidation', 'discovery', 'challenge']).describe('Type of event to resolve'),
+      id: z.string().describe('Event ID (engram_id, discovery_id, or challenge_id)'),
+      action: z.string().describe('Resolution action: defend|revise|retire|dismiss (recon), explore|note (discovery), dismiss (challenge)'),
+      revised_statement: z.string().optional().describe('New statement text (required when action is "revise")'),
+    }),
+  },
 ] as const

@@ -8,8 +8,21 @@ import { handleInject } from './inject-tool.js'
 import { loadEngrams } from '../engrams.js'
 import { localDate } from './capture.js'
 import { buildHints } from '../hints.js'
+import {
+  expireReconsolidations,
+  generateChallenge,
+  generateDiscoveryCandidates,
+  offerDiscovery,
+  checkChallengeCompletion,
+  resolveChallenge,
+  formatSessionStart,
+  formatReconsolidation,
+  formatDiscovery,
+  formatChallenge,
+} from '../engagement/index.js'
 import type { StorageConfig } from '../storage.js'
 import type { DatacortexBridge } from '../datacortex.js'
+import type { EngagementService } from '../engagement/index.js'
 
 interface SessionStartArgs {
   task?: string
@@ -22,6 +35,7 @@ interface SessionStartResult {
   pending_candidates: number
   recommendations: string[]
   guide?: string
+  engagement?: Record<string, unknown>
   _hints?: ReturnType<typeof buildHints>
 }
 
@@ -29,6 +43,7 @@ export async function handleSessionStart(
   args: SessionStartArgs,
   storage: StorageConfig,
   bridge?: DatacortexBridge | null,
+  engagementService?: EngagementService,
 ): Promise<SessionStartResult> {
   let engrams: { text: string; count: number } | null = null
 
@@ -77,7 +92,98 @@ export async function handleSessionStart(
   const activeCount = allEngrams.filter(e => e.status === 'active').length
   const guide = activeCount === 0 ? SESSION_GUIDE_FULL : SESSION_GUIDE_SHORT
 
-  return { engrams, journal_today, pending_candidates, recommendations, guide, _hints: hints }
+  // Initialize engagement service and run lifecycle hooks
+  let engagement: Record<string, unknown> | undefined
+  if (engagementService?.isEnabled()) {
+    try {
+      await engagementService.init()
+      engagementService.markSessionActive()
+
+      // Lifecycle: expire overdue reconsolidations
+      engagementService.applyProfileUpdate(p => expireReconsolidations(p))
+
+      // Lifecycle: check/complete active challenge
+      const profileAfterExpire = engagementService.getProfile()
+      if (profileAfterExpire?.challenges.active) {
+        if (checkChallengeCompletion(profileAfterExpire, profileAfterExpire.challenges.active)) {
+          engagementService.applyProfileUpdate(p => resolveChallenge(p, p.challenges.active!.id))
+        }
+      }
+
+      // Lifecycle: generate new challenge if none active
+      engagementService.applyProfileUpdate(p => generateChallenge(p))
+
+      // Lifecycle: generate discovery candidates (best-effort, no LLM call at session start)
+      const profileForDiscovery = engagementService.getProfile()
+      if (profileForDiscovery) {
+        const candidates = generateDiscoveryCandidates(allEngrams, profileForDiscovery)
+        if (candidates.length > 0) {
+          // Offer top candidate without LLM evaluation (just keyword overlap)
+          const topCandidate = candidates[0]
+          engagementService.applyProfileUpdate(p => offerDiscovery(p, {
+            engram_a: topCandidate.engram_a,
+            engram_b: topCandidate.engram_b,
+            connection: `Shared concepts across ${topCandidate.engram_a.domain} and ${topCandidate.engram_b.domain}`,
+          }))
+        }
+      }
+
+      // Build engagement response
+      const profile = engagementService.getProfile()
+      if (profile) {
+        const displayLines: string[] = [formatSessionStart(profile)]
+
+        // Show pending reconsolidations
+        for (const recon of profile.reconsolidation.pending.slice(0, 2)) {
+          displayLines.push('')
+          displayLines.push(formatReconsolidation({
+            engram_id: recon.engram_id,
+            statement: recon.statement,
+            contradiction: recon.contradiction,
+            evidence_strength: recon.evidence_strength,
+          }))
+        }
+
+        // Show pending discoveries
+        for (const disc of profile.discoveries.pending.slice(0, 1)) {
+          displayLines.push('')
+          displayLines.push(formatDiscovery({
+            id: disc.id,
+            engram_a: disc.engram_a,
+            engram_b: disc.engram_b,
+            connection: disc.connection,
+          }))
+        }
+
+        // Show active challenge
+        if (profile.challenges.active) {
+          displayLines.push('')
+          displayLines.push(formatChallenge({
+            id: profile.challenges.active.id,
+            description: profile.challenges.active.description,
+            bonus_xp: profile.challenges.active.bonus_xp,
+            expires_at: profile.challenges.active.expires_at,
+          }))
+        }
+
+        engagement = {
+          tier: profile.tier.current,
+          xp: profile.xp.total,
+          multiplier: profile.multipliers.effective,
+          active_challenge: profile.challenges.active ? {
+            id: profile.challenges.active.id,
+            description: profile.challenges.active.description,
+            expires_at: profile.challenges.active.expires_at,
+          } : null,
+          pending_reconsolidations: profile.reconsolidation.pending.length,
+          pending_discoveries: profile.discoveries.pending.length,
+          display: displayLines.join('\n'),
+        }
+      }
+    } catch { /* engagement never breaks core tools */ }
+  }
+
+  return { engrams, journal_today, pending_candidates, recommendations, guide, engagement, _hints: hints }
 }
 
 // Full guide for fresh installs (no active engrams yet)
