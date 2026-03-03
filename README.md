@@ -47,6 +47,21 @@ Add to `.mcp.json` in your project root (or `~/.claude.json` globally):
 }
 ```
 
+Then allow Datacore tools in `.claude/settings.json` (or `.claude/settings.local.json`):
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__datacore"
+    ]
+  },
+  "enableAllProjectMcpServers": true
+}
+```
+
+This auto-approves all Datacore MCP tools (session, learn, inject, etc.) so you don't get prompted on every call. The `enableAllProjectMcpServers` setting ensures the MCP server defined in `.mcp.json` is activated automatically.
+
 ### Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
