@@ -12,6 +12,7 @@ import type { EngagementService } from '../engagement/index.js'
 
 interface SessionEndArgs {
   summary: string
+  session_id?: string
   tags?: string[]
   engram_suggestions?: Array<{ statement: string; type?: 'behavioral' | 'terminological' | 'procedural' | 'architectural' }>
 }
@@ -28,6 +29,12 @@ export async function handleSessionEnd(
   storage: StorageConfig,
   engagementService?: EngagementService,
 ): Promise<SessionEndResult> {
+  // Phase 2: Hebbian co-access write-back
+  // When session_id is provided, write co-access associations between engrams
+  // that were injected together in this session. This strengthens semantic links
+  // between frequently co-retrieved engrams.
+  // TODO(Phase 2): Implement co-access association write-back using args.session_id
+
   // Capture journal entry
   const captureResult = await handleCapture(
     { type: 'journal', content: args.summary, tags: args.tags },

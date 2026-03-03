@@ -3,13 +3,14 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as yaml from 'js-yaml'
 import { loadEngrams, loadAllPacks } from '../engrams.js'
-import { selectEngrams, type InjectionContext } from '../inject.js'
+import { selectAndSpread, type InjectionContext, type WireEngram } from '../inject.js'
 import { buildHints } from '../hints.js'
-import type { Engram } from '../schemas/engram.js'
+import type { Engram, KnowledgeAnchor } from '../schemas/engram.js'
 
 interface InjectArgs {
   prompt: string
   scope?: string
+  session_id?: string
   max_tokens?: number
   min_relevance?: number
 }
@@ -17,7 +18,8 @@ interface InjectArgs {
 interface InjectResult {
   text: string
   count: number
-  tokens_used: number
+  tokens_used: { directives: number; consider: number }
+  related_documents?: number
   _hints?: ReturnType<typeof buildHints>
 }
 
@@ -31,16 +33,17 @@ export async function handleInject(
   const ctx: InjectionContext = {
     prompt: args.prompt,
     scope: args.scope,
+    session_id: args.session_id,
     maxTokens: args.max_tokens,
     minRelevance: args.min_relevance,
   }
 
-  const result = selectEngrams(ctx, personalEngrams, packs)
+  const result = selectAndSpread(ctx, personalEngrams, packs)
   const totalCount = result.directives.length + result.consider.length
 
   if (totalCount === 0) {
     return {
-      text: '', count: 0, tokens_used: 0,
+      text: '', count: 0, tokens_used: { directives: 0, consider: 0 },
       _hints: buildHints({
         next: 'No engrams matched this task. Use datacore.recall to search all sources, or datacore.learn to record new knowledge.',
         related: ['datacore.recall', 'datacore.learn'],
@@ -61,6 +64,9 @@ export async function handleInject(
       lines.push(formatEngram(e, totalCount))
     }
   }
+  if (result.related_documents.length > 0) {
+    lines.push('\n' + formatRelatedDocs(result.related_documents))
+  }
 
   // Update usage tracking for selected personal engrams
   updateUsageTracking(
@@ -79,6 +85,7 @@ export async function handleInject(
     text: lines.join('\n'),
     count: totalCount,
     tokens_used: result.tokens_used,
+    related_documents: result.related_documents.length > 0 ? result.related_documents.length : undefined,
     _hints: buildHints({
       next: `After task, call datacore.feedback on helpful/unhelpful engrams.${idsList}`,
       related: ['datacore.feedback', 'datacore.session.end'],
@@ -89,7 +96,7 @@ export async function handleInject(
 function updateUsageTracking(
   engramsPath: string,
   allPersonal: Engram[],
-  selected: Engram[],
+  selected: WireEngram[],
 ): void {
   const selectedPersonalIds = new Set(
     selected.filter(e => !e.pack).map(e => e.id),
@@ -119,12 +126,16 @@ export function atomicWriteYaml(filePath: string, data: unknown): void {
   fs.renameSync(tmpPath, filePath)
 }
 
-function formatEngram(engram: Engram, totalCount: number): string {
+function formatEngram(engram: WireEngram, totalCount: number): string {
   if (totalCount < 10) {
     let text = `- **${engram.statement}**`
     if (engram.rationale) text += `\n  _${engram.rationale}_`
     if (engram.contraindications?.length) {
       text += `\n  Except: ${engram.contraindications.join(', ')}`
+    }
+    if (engram.dual_coding) {
+      if (engram.dual_coding.example) text += `\n  Example: ${engram.dual_coding.example}`
+      if (engram.dual_coding.analogy) text += `\n  Analogy: ${engram.dual_coding.analogy}`
     }
     return text
   }
@@ -133,4 +144,14 @@ function formatEngram(engram: Engram, totalCount: number): string {
     return `- ${engram.statement}${source}`
   }
   return `- ${engram.statement}`
+}
+
+function formatRelatedDocs(docs: KnowledgeAnchor[]): string {
+  const lines: string[] = ['## RELATED DOCUMENTS\n']
+  for (const doc of docs) {
+    let line = `- [${doc.relevance}] ${doc.path}`
+    if (doc.snippet) line += ` — "${doc.snippet}"`
+    lines.push(line)
+  }
+  return lines.join('\n')
 }

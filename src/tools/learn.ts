@@ -13,6 +13,8 @@ interface LearnArgs {
   domain?: string
   rationale?: string
   visibility?: 'private' | 'public' | 'template'
+  knowledge_anchors?: Array<{ path: string; relevance?: string; snippet?: string; snippet_extracted_at?: string }>
+  dual_coding?: { example?: string; analogy?: string }
 }
 
 interface LearnResult {
@@ -58,6 +60,14 @@ export async function handleLearn(args: LearnArgs, engramsPath: string, service?
     rationale: args.rationale,
     derivation_count: 1,
     domain: args.domain,
+    knowledge_anchors: args.knowledge_anchors?.map(a => ({
+      path: a.path,
+      relevance: (a.relevance as 'primary' | 'supporting' | 'example') ?? 'supporting',
+      snippet: a.snippet,
+      snippet_extracted_at: a.snippet_extracted_at,
+    })) ?? [],
+    associations: [],
+    dual_coding: args.dual_coding?.example || args.dual_coding?.analogy ? args.dual_coding : undefined,
     tags: args.tags ?? [],
     activation: {
       retrieval_strength: autoPromote ? 0.7 : 0.5,

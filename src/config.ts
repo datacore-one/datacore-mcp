@@ -23,6 +23,12 @@ export const ConfigSchema = z.object({
     enabled: z.boolean().default(true),
     inline_xp: z.boolean().default(false),
   }).default({}),
+  injection: z.object({
+    directive_cap: z.number().default(10),
+    consider_cap: z.number().default(5),
+    spread_cap: z.number().default(3),
+    spread_budget: z.number().default(480),
+  }).default({}),
 })
 
 export type DatacoreConfig = z.infer<typeof ConfigSchema>

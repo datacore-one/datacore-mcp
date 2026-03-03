@@ -1,13 +1,13 @@
 // test/inject.test.ts
 import { describe, it, expect } from 'vitest'
-import { selectEngrams, type InjectionContext } from '../src/inject.js'
+import { selectAndSpread, type InjectionContext } from '../src/inject.js'
 import type { Engram } from '../src/schemas/engram.js'
 import type { LoadedPack } from '../src/engrams.js'
 
 const makeEngram = (overrides: Partial<Engram> & { id: string; statement: string }): Engram => ({
   version: 2, status: 'active', type: 'behavioral', scope: 'global',
   visibility: 'private', consolidated: false, derivation_count: 1, tags: [], pack: null,
-  abstract: null, derived_from: null,
+  abstract: null, derived_from: null, knowledge_anchors: [], associations: [],
   activation: { retrieval_strength: 0.8, storage_strength: 0.5, frequency: 3, last_accessed: '2026-02-19' },
   ...overrides,
 })
@@ -20,11 +20,11 @@ const makePack = (id: string, policy: 'on_match' | 'on_request', matchTerms: str
   engrams,
 })
 
-describe('selectEngrams', () => {
+describe('selectAndSpread', () => {
   it('returns empty when no engrams match', () => {
     const ctx: InjectionContext = { prompt: 'fix CSS margin issue' }
     const engrams = [makeEngram({ id: 'ENG-2026-0219-001', statement: 'Check data ownership', tags: ['data', 'privacy'] })]
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     expect(result.directives).toHaveLength(0)
   })
 
@@ -34,7 +34,7 @@ describe('selectEngrams', () => {
       id: 'ENG-2026-0219-001', statement: 'Validate data ownership',
       tags: ['data', 'ownership'], domain: 'ethics.data-sovereignty',
     })]
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     expect(result.directives).toHaveLength(1)
   })
 
@@ -43,7 +43,7 @@ describe('selectEngrams', () => {
     const pack = makePack('fds-v1', 'on_match', ['design', 'privacy', 'consent', 'data'], [
       makeEngram({ id: 'ENG-2026-0219-010', statement: 'Require explicit consent', tags: ['consent'], pack: 'fds-v1' }),
     ])
-    const result = selectEngrams(ctx, [], [pack])
+    const result = selectAndSpread(ctx, [], [pack])
     expect(result.directives).toHaveLength(1)
   })
 
@@ -52,7 +52,7 @@ describe('selectEngrams', () => {
     const pack = makePack('stoic-v1', 'on_request', ['decision', 'ethics'], [
       makeEngram({ id: 'ENG-2026-0219-020', statement: 'Focus on what you can control', tags: ['stoicism'], pack: 'stoic-v1' }),
     ])
-    const result = selectEngrams(ctx, [], [pack])
+    const result = selectAndSpread(ctx, [], [pack])
     expect(result.directives).toHaveLength(0)
   })
 
@@ -61,7 +61,7 @@ describe('selectEngrams', () => {
     const engrams = Array.from({ length: 50 }, (_, i) =>
       makeEngram({ id: `ENG-2026-0219-${String(i).padStart(3, '0')}`, statement: `Data privacy principle ${i}`, tags: ['data', 'privacy'] })
     )
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     // ~40 tokens per engram compact, 200 budget = ~5 engrams
     expect(result.directives.length + result.consider.length).toBeLessThanOrEqual(10)
     expect(result.directives.length + result.consider.length).toBeGreaterThan(0)
@@ -73,7 +73,7 @@ describe('selectEngrams', () => {
       id: 'ENG-2026-0219-001', statement: 'Check data ownership', tags: ['data'],
       activation: { retrieval_strength: 0.1, storage_strength: 0.5, frequency: 1, last_accessed: '2026-02-19' },
     })]
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     expect(result.directives).toHaveLength(0)
   })
 
@@ -83,7 +83,7 @@ describe('selectEngrams', () => {
       Array.from({ length: 10 }, (_, i) =>
         makeEngram({ id: `ENG-2026-0219-${String(i).padStart(3, '0')}`, statement: `Heavy ${i}`, tags: ['design'], pack: 'heavy' })
       ))
-    const result = selectEngrams(ctx, [], [pack])
+    const result = selectAndSpread(ctx, [], [pack])
     const heavyCount = [...result.directives, ...result.consider].filter(e => e.pack === 'heavy').length
     expect(heavyCount).toBeLessThanOrEqual(5)
   })
@@ -96,7 +96,7 @@ describe('selectEngrams', () => {
       makeEngram({ id: 'ENG-2026-0219-002', statement: 'High priority', tags: ['data'],
         activation: { retrieval_strength: 0.9, storage_strength: 0.5, frequency: 5, last_accessed: '2026-02-19' } }),
     ]
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     expect(result.directives[0].id).toBe('ENG-2026-0219-002')
   })
 
@@ -106,7 +106,7 @@ describe('selectEngrams', () => {
       makeEngram({ id: 'ENG-001', statement: 'Global rule', tags: ['data'], scope: 'global' }),
       makeEngram({ id: 'ENG-002', statement: 'Agent rule', tags: ['data'], scope: 'agent:researcher' }),
     ]
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     const all = [...result.directives, ...result.consider]
     expect(all).toHaveLength(1)
     expect(all[0].id).toBe('ENG-001')
@@ -119,7 +119,7 @@ describe('selectEngrams', () => {
       makeEngram({ id: 'ENG-002', statement: 'Agent rule', tags: ['data'], scope: 'agent:researcher' }),
       makeEngram({ id: 'ENG-003', statement: 'Other agent rule', tags: ['data'], scope: 'agent:writer' }),
     ]
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     const all = [...result.directives, ...result.consider]
     expect(all).toHaveLength(2)
     const ids = all.map(e => e.id).sort()
@@ -134,7 +134,7 @@ describe('selectEngrams', () => {
       makeEngram({ id: 'ENG-002', statement: 'Consolidated', tags: ['data'], consolidated: true,
         activation: { retrieval_strength: 0.8, storage_strength: 0.5, frequency: 3, last_accessed: '2026-02-19' } }),
     ]
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     // Consolidated should rank higher due to 1.1x boost
     expect(result.directives[0].id).toBe('ENG-002')
   })
@@ -147,7 +147,7 @@ describe('selectEngrams', () => {
       makeEngram({ id: 'ENG-002', statement: 'Positive feedback', tags: ['data'],
         feedback_signals: { positive: 5, negative: 0, neutral: 0 } }),
     ]
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     expect(result.directives[0].id).toBe('ENG-002')
   })
 
@@ -159,7 +159,7 @@ describe('selectEngrams', () => {
       makeEngram({ id: 'ENG-002', statement: 'Negative feedback', tags: ['data'],
         feedback_signals: { positive: 0, negative: 3, neutral: 0 } }),
     ]
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     expect(result.directives[0].id).toBe('ENG-001')
   })
 
@@ -171,7 +171,7 @@ describe('selectEngrams', () => {
       makeEngram({ id: 'ENG-002', statement: 'Old engram', tags: ['data'],
         activation: { retrieval_strength: 0.8, storage_strength: 0.5, frequency: 3, last_accessed: '2025-01-01' } }),
     ]
-    const result = selectEngrams(ctx, engrams, [])
+    const result = selectAndSpread(ctx, engrams, [])
     const all = [...result.directives, ...result.consider]
     expect(all[0].id).toBe('ENG-001')
   })
@@ -182,7 +182,7 @@ describe('selectEngrams', () => {
       makeEngram({ id: 'ENG-PACK-001', statement: 'Require explicit consent', tags: ['consent'], pack: 'fds-v1',
         activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: '2024-01-01' } }),
     ])
-    const result = selectEngrams(ctx, [], [pack])
+    const result = selectAndSpread(ctx, [], [pack])
     // Pack engram should still match despite very old last_accessed
     expect(result.directives.length + result.consider.length).toBe(1)
   })

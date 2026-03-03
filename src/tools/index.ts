@@ -22,6 +22,16 @@ export const TOOLS = [
       tags: z.array(z.string()).optional(),
       domain: z.string().optional().describe('Dot-notation domain: software.architecture'),
       visibility: z.enum(['private', 'public', 'template']).optional(),
+      knowledge_anchors: z.array(z.object({
+        path: z.string().describe('Path to related document (e.g., zettel/Data-Pricing.md)'),
+        relevance: z.enum(['primary', 'supporting', 'example']).optional().describe('Anchor relevance level'),
+        snippet: z.string().optional().describe('Short snippet from the document (max 200 chars)'),
+        snippet_extracted_at: z.string().optional().describe('ISO date when snippet was extracted'),
+      })).optional().describe('Links to related knowledge documents'),
+      dual_coding: z.object({
+        example: z.string().optional().describe('Concrete example illustrating the engram'),
+        analogy: z.string().optional().describe('Analogy to aid understanding'),
+      }).optional().describe('Dual coding: example and/or analogy for richer encoding'),
     }),
   },
   {
@@ -30,6 +40,7 @@ export const TOOLS = [
     inputSchema: z.object({
       prompt: z.string().describe('The task or question to match against'),
       scope: z.string().optional().describe('Filter by scope: global | agent:X | module:X | command:X'),
+      session_id: z.string().optional().describe('Session ID for co-access tracking (from session.start)'),
       max_tokens: z.number().optional().describe('Token budget (default: 8000)'),
       min_relevance: z.number().optional().describe('Minimum score threshold (default: 0.3)'),
     }),
@@ -121,6 +132,7 @@ export const TOOLS = [
     description: 'End a session — captures journal summary and creates engrams from suggestions. Call before the conversation ends to preserve what was learned.',
     inputSchema: z.object({
       summary: z.string().describe('Session summary for the journal'),
+      session_id: z.string().optional().describe('Session ID from session.start (for co-access tracking)'),
       tags: z.array(z.string()).optional().describe('Tags for the journal entry'),
       engram_suggestions: z.array(z.object({
         statement: z.string().describe('The knowledge assertion'),

@@ -13,6 +13,28 @@ export const KnowledgeTypeSchema = z.object({
   cognitive_level: z.enum(['remember', 'understand', 'apply', 'analyze', 'evaluate', 'create']),
 })
 
+export const KnowledgeAnchorSchema = z.object({
+  path: z.string(),
+  relevance: z.enum(['primary', 'supporting', 'example']).default('supporting'),
+  snippet: z.string().max(200).optional(),
+  snippet_extracted_at: z.string().optional(),
+})
+
+export const AssociationSchema = z.object({
+  target_type: z.enum(['engram', 'document']),
+  target: z.string(),
+  strength: z.number().min(0).max(0.95),
+  type: z.enum(['semantic', 'temporal', 'causal', 'co_accessed']),
+})
+
+export const DualCodingSchema = z.object({
+  example: z.string().optional(),
+  analogy: z.string().optional(),
+}).refine(
+  d => d.example || d.analogy,
+  'At least one of example or analogy must be provided'
+)
+
 export const RelationsSchema = z.object({
   broader: z.array(z.string()).default([]),
   narrower: z.array(z.string()).default([]),
@@ -54,6 +76,9 @@ export const EngramSchema = z.object({
   activation: ActivationSchema,
   provenance: ProvenanceSchema.optional(),
   feedback_signals: FeedbackSignalsSchema.optional(),
+  knowledge_anchors: z.array(KnowledgeAnchorSchema).default([]),
+  associations: z.array(AssociationSchema).default([]),
+  dual_coding: DualCodingSchema.optional(),
   tags: z.array(z.string()).default([]),
   pack: z.string().nullable().default(null),
   abstract: z.string().nullable().default(null),
@@ -61,6 +86,8 @@ export const EngramSchema = z.object({
 })
 
 export type Engram = z.infer<typeof EngramSchema>
+export type KnowledgeAnchor = z.infer<typeof KnowledgeAnchorSchema>
+export type Association = z.infer<typeof AssociationSchema>
 
 // Pack manifest matches SKILL.md frontmatter structure
 export const DatacoreExtensionSchema = z.object({

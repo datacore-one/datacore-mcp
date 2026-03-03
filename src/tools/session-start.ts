@@ -4,6 +4,7 @@
 // Leaf handlers must NEVER import session handlers.
 import * as fs from 'fs'
 import * as path from 'path'
+import * as crypto from 'crypto'
 import { handleInject } from './inject-tool.js'
 import { loadEngrams } from '../engrams.js'
 import { localDate } from './capture.js'
@@ -30,6 +31,7 @@ interface SessionStartArgs {
 }
 
 interface SessionStartResult {
+  session_id: string
   engrams: { text: string; count: number } | null
   journal_today: string | null
   pending_candidates: number
@@ -45,11 +47,12 @@ export async function handleSessionStart(
   bridge?: DatacortexBridge | null,
   engagementService?: EngagementService,
 ): Promise<SessionStartResult> {
+  const session_id = crypto.randomUUID()
   let engrams: { text: string; count: number } | null = null
 
   if (args.task) {
     const injectResult = await handleInject(
-      { prompt: args.task, scope: args.tags?.length ? `tags:${args.tags.join(',')}` : undefined },
+      { prompt: args.task, session_id, scope: args.tags?.length ? `tags:${args.tags.join(',')}` : undefined },
       { engramsPath: storage.engramsPath, packsPath: storage.packsPath },
     )
     if (injectResult.count > 0) {
@@ -183,7 +186,7 @@ export async function handleSessionStart(
     } catch { /* engagement never breaks core tools */ }
   }
 
-  return { engrams, journal_today, pending_candidates, recommendations, guide, engagement, _hints: hints }
+  return { session_id, engrams, journal_today, pending_candidates, recommendations, guide, engagement, _hints: hints }
 }
 
 // Full guide for fresh installs (no active engrams yet)

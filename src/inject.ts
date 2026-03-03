@@ -1,77 +1,147 @@
 // src/inject.ts
-import type { Engram } from './schemas/engram.js'
+import type { Engram, KnowledgeAnchor, Association } from './schemas/engram.js'
 import type { LoadedPack } from './engrams.js'
 import { decayedStrength } from './decay.js'
+import { getConfig } from './config.js'
 
 export interface InjectionContext {
   prompt: string
   scope?: string
+  session_id?: string
   maxTokens?: number      // Default: 8000 (~10% of 80K context)
   minRelevance?: number   // Default: 0.3
 }
 
-export interface InjectionResult {
-  directives: Engram[]
-  consider: Engram[]
-  tokens_used: number
+export type ScoredEngram = Engram & {
+  keyword_match: number
+  raw_score: number
+  score: number
 }
 
-interface ScoredEngram {
-  engram: Engram
-  score: number
+export type AgentEngram = Omit<ScoredEngram, 'associations'>
+export type WireEngram = Omit<AgentEngram, 'keyword_match' | 'raw_score' | 'score'>
+
+export interface InjectionResult {
+  directives: WireEngram[]
+  consider: WireEngram[]
+  related_documents: KnowledgeAnchor[]
+  tokens_used: { directives: number; consider: number }
 }
 
 const DEFAULT_MAX_TOKENS = 8000
 const DEFAULT_MIN_RELEVANCE = 0.3
-const TOKENS_PER_ENGRAM = 40   // Compact format estimate
 const MAX_PER_PACK = 5
 const MAX_PER_DOMAIN = 10
 
-export function selectEngrams(
-  ctx: InjectionContext,
-  personalEngrams: Engram[],
-  packs: LoadedPack[],
-): InjectionResult {
-  const promptLower = ctx.prompt.toLowerCase()
-  const promptWords = new Set(promptLower.split(/\W+/).filter(w => w.length > 2))
-  const scored: ScoredEngram[] = []
+// DIP-0019 consider pool (bottom 1/3 of first-pass)
+const DIP19_CONSIDER_MAX = 5
+const DIP19_CONSIDER_BUDGET = 200
 
-  for (const engram of personalEngrams) {
-    if (engram.status !== 'active') continue
-    const score = scoreEngram(engram, promptLower, promptWords, [], ctx.scope, false)
-    if (score > 0) scored.push({ engram, score })
+const RELEVANCE_RANK: Record<string, number> = { primary: 0, supporting: 1, example: 2 }
+
+// --- Token estimation ---
+
+export function estimateTokens(engram: ScoredEngram): number {
+  // Serialize wire-visible fields only (exclude scoring + associations)
+  const { keyword_match: _km, raw_score: _rs, score: _s, associations: _a, ...wire } = engram
+  const serialized = JSON.stringify(wire)
+  return Math.ceil(serialized.length / 4)
+}
+
+// --- Anchor boost ---
+
+function tokenize(text: string): Set<string> {
+  return new Set(text.toLowerCase().split(/\W+/).filter(w => w.length > 2))
+}
+
+export function anchorBoost(engram: Engram, taskWords: Set<string>): number {
+  if (!engram.knowledge_anchors?.length) return 0
+
+  const threshold = taskWords.size <= 1 ? 1 : 2
+  let boost = 0
+
+  for (const anchor of engram.knowledge_anchors) {
+    if (!anchor.snippet) continue
+    const snippetWords = tokenize(anchor.snippet)
+    let overlap = 0
+    for (const word of taskWords) {
+      if (snippetWords.has(word)) overlap++
+    }
+    if (overlap >= threshold) boost += 0.5
   }
 
-  for (const pack of packs) {
-    if (pack.manifest['x-datacore'].injection_policy === 'on_request') continue
-    const matchTerms = pack.manifest['x-datacore'].match_terms
-    for (const engram of pack.engrams) {
-      if (engram.status !== 'active') continue
-      const score = scoreEngram(engram, promptLower, promptWords, matchTerms, ctx.scope, true)
-      if (score > 0) scored.push({ engram, score })
+  return Math.min(boost, 2.0)
+}
+
+// --- Relations-to-associations converter ---
+// Converts the legacy `relations` field into the new `associations` format.
+// Used as fallback when engram.associations is empty but relations exists.
+
+export function flattenRelations(engram: Engram): Association[] {
+  if (!engram.relations) return []
+
+  const associations: Association[] = []
+  for (const id of engram.relations.broader) {
+    associations.push({ target_type: 'engram', target: id, type: 'semantic', strength: 0.5 })
+  }
+  for (const id of engram.relations.narrower) {
+    associations.push({ target_type: 'engram', target: id, type: 'semantic', strength: 0.5 })
+  }
+  for (const id of engram.relations.related) {
+    associations.push({ target_type: 'engram', target: id, type: 'semantic', strength: 0.5 })
+  }
+  // Skip conflicts — they don't produce positive associations
+  return associations
+}
+
+// --- Strip pipeline ---
+
+function stripAssociations(engram: ScoredEngram): AgentEngram {
+  const { associations: _, ...rest } = engram
+  return rest
+}
+
+function stripScoring(engram: AgentEngram): WireEngram {
+  const { keyword_match: _, raw_score: _r, score: _s, ...rest } = engram
+  return rest
+}
+
+// --- Anchor aggregation ---
+
+export function aggregateAnchors(directives: AgentEngram[], consider: AgentEngram[]): KnowledgeAnchor[] {
+  const seen = new Map<string, { anchor: KnowledgeAnchor; engramScore: number }>()
+
+  const processPool = (pool: AgentEngram[]) => {
+    for (const engram of pool) {
+      if (!engram.knowledge_anchors?.length) continue
+      for (const anchor of engram.knowledge_anchors) {
+        const existing = seen.get(anchor.path)
+        const rank = RELEVANCE_RANK[anchor.relevance] ?? 2
+        const existingRank = existing ? (RELEVANCE_RANK[existing.anchor.relevance] ?? 2) : Infinity
+        if (!existing || rank < existingRank || (rank === existingRank && engram.score > existing.engramScore)) {
+          seen.set(anchor.path, { anchor, engramScore: engram.score })
+        }
+      }
     }
   }
 
-  const maxTokens = ctx.maxTokens ?? DEFAULT_MAX_TOKENS
-  const minRelevance = ctx.minRelevance ?? DEFAULT_MIN_RELEVANCE
+  processPool(directives)
+  processPool(consider)
 
-  // Filter by minimum relevance
-  const passing = scored.filter(s => s.score >= minRelevance)
-  passing.sort((a, b) => b.score - a.score)
+  const entries = Array.from(seen.values())
+  entries.sort((a, b) => {
+    const rankA = RELEVANCE_RANK[a.anchor.relevance] ?? 2
+    const rankB = RELEVANCE_RANK[b.anchor.relevance] ?? 2
+    if (rankA !== rankB) return rankA - rankB
+    return b.engramScore - a.engramScore
+  })
 
-  // Fill token budget with diversity constraints
-  const selected = fillTokenBudget(passing, maxTokens)
-
-  // Split: top 2/3 = directives, bottom 1/3 = consider
-  const splitPoint = Math.ceil(selected.length * 2 / 3)
-  return {
-    directives: selected.slice(0, splitPoint),
-    consider: selected.slice(splitPoint),
-    tokens_used: selected.length * TOKENS_PER_ENGRAM,
-  }
+  return entries.slice(0, 10).map(e => e.anchor)
 }
 
-function scoreEngram(engram: Engram, promptLower: string, promptWords: Set<string>, packMatchTerms: string[], scopeFilter: string | undefined, isPack: boolean): number {
+// --- Scoring ---
+
+export function scoreEngram(engram: Engram, promptLower: string, promptWords: Set<string>, packMatchTerms: string[], scopeFilter: string | undefined, isPack: boolean): number {
   // Scope filtering: if scope is specified, only include matching engrams
   if (scopeFilter) {
     if (scopeFilter === 'global') {
@@ -126,14 +196,20 @@ function scoreEngram(engram: Engram, promptLower: string, promptWords: Set<strin
   return score
 }
 
-function fillTokenBudget(scored: ScoredEngram[], maxTokens: number): Engram[] {
-  const result: Engram[] = []
+// --- Token budget filler ---
+
+export function fillTokenBudget(
+  scored: ScoredEngram[],
+  maxTokens: number,
+): { selected: ScoredEngram[]; tokens_used: number } {
+  const result: ScoredEngram[] = []
   const packCounts = new Map<string, number>()
   const domainCounts = new Map<string, number>()
   let tokensUsed = 0
 
-  for (const { engram } of scored) {
-    if (tokensUsed + TOKENS_PER_ENGRAM > maxTokens) break
+  for (const engram of scored) {
+    const cost = estimateTokens(engram)
+    if (tokensUsed + cost > maxTokens) continue
 
     const pack = engram.pack ?? '__personal__'
     const packCount = packCounts.get(pack) ?? 0
@@ -145,9 +221,171 @@ function fillTokenBudget(scored: ScoredEngram[], maxTokens: number): Engram[] {
     if (domainCount >= MAX_PER_DOMAIN) continue
 
     result.push(engram)
-    tokensUsed += TOKENS_PER_ENGRAM
+    tokensUsed += cost
     packCounts.set(pack, packCount + 1)
     domainCounts.set(topDomain, domainCount + 1)
   }
-  return result
+  return { selected: result, tokens_used: tokensUsed }
 }
+
+// --- Main injection function ---
+
+export function selectAndSpread(
+  ctx: InjectionContext,
+  personalEngrams: Engram[],
+  packs: LoadedPack[],
+): InjectionResult {
+  const config = getConfig()
+  const spreadCap = config.injection?.spread_cap ?? 3
+  const spreadBudget = config.injection?.spread_budget ?? 480
+
+  const promptLower = ctx.prompt.toLowerCase()
+  const promptWords = new Set(promptLower.split(/\W+/).filter(w => w.length > 2))
+  const maxTokens = ctx.maxTokens ?? DEFAULT_MAX_TOKENS
+  const minRelevance = ctx.minRelevance ?? DEFAULT_MIN_RELEVANCE
+
+  // Step 0: Build engram map for spreading activation
+  const engramMap = new Map<string, Engram>()
+
+  // Step 1-2: Score all active engrams
+  const scored: ScoredEngram[] = []
+
+  for (const engram of personalEngrams) {
+    if (engram.status !== 'active') continue
+    engramMap.set(engram.id, engram)
+    const raw = scoreEngram(engram, promptLower, promptWords, [], ctx.scope, false)
+    if (raw > 0) {
+      scored.push({ ...engram, keyword_match: raw, raw_score: raw, score: raw })
+    }
+  }
+
+  for (const pack of packs) {
+    if (pack.manifest['x-datacore'].injection_policy === 'on_request') continue
+    const matchTerms = pack.manifest['x-datacore'].match_terms
+    for (const engram of pack.engrams) {
+      if (engram.status !== 'active') continue
+      engramMap.set(engram.id, engram)
+      const raw = scoreEngram(engram, promptLower, promptWords, matchTerms, ctx.scope, true)
+      if (raw > 0) {
+        scored.push({ ...engram, keyword_match: raw, raw_score: raw, score: raw })
+      }
+    }
+  }
+
+  // Step 3: Filter by minimum relevance
+  const filtered = scored.filter(s => s.score >= minRelevance)
+
+  // Step 4: Normalize keyword_match to [0,10]
+  const maxKm = Math.max(...filtered.map(e => e.keyword_match), 1)
+  for (const e of filtered) {
+    e.keyword_match = (e.keyword_match / maxKm) * 10
+  }
+
+  // Step 5: Compute first-pass score with anchor boost
+  for (const e of filtered) {
+    const aBoost = anchorBoost(e, promptWords)
+    e.score = e.keyword_match + aBoost  // schemaBoost = 0 for Phase 1
+  }
+
+  // Sort by score descending
+  filtered.sort((a, b) => b.score - a.score)
+
+  // Step 6: Fill directive token budget
+  const { selected: directives, tokens_used: directiveTokens } = fillTokenBudget(filtered, maxTokens)
+  const directiveIds = new Set(directives.map(e => e.id))
+
+  // DIP-0019 consider pool: next candidates that didn't fit as directives
+  // Respect pack diversity: exclude packs already at their cap in directives
+  const directivePackCounts = new Map<string, number>()
+  for (const e of directives) {
+    const pack = e.pack ?? '__personal__'
+    directivePackCounts.set(pack, (directivePackCounts.get(pack) ?? 0) + 1)
+  }
+  const dip19Remainder = filtered.filter(e => {
+    if (directiveIds.has(e.id)) return false
+    const pack = e.pack ?? '__personal__'
+    if (pack !== '__personal__' && (directivePackCounts.get(pack) ?? 0) >= MAX_PER_PACK) return false
+    return true
+  })
+  const { selected: dip19Consider } = fillTokenBudget(
+    dip19Remainder, DIP19_CONSIDER_BUDGET,
+  )
+  // Cap at DIP19_CONSIDER_MAX and correct token count
+  const dip19Pool = dip19Consider.slice(0, DIP19_CONSIDER_MAX)
+  const dip19PoolTokens = dip19Pool.reduce((acc, e) => acc + estimateTokens(e), 0)
+
+  // Step 7-8: Guard empty
+  if (directives.length === 0 && dip19Pool.length === 0) {
+    return {
+      directives: [],
+      consider: [],
+      related_documents: [],
+      tokens_used: { directives: 0, consider: 0 },
+    }
+  }
+
+  const maxFirstPass = Math.max(...directives.map(e => e.score), 1)
+
+  // Steps 9-13: Spreading activation
+  const visited = new Set(directives.map(e => e.id))
+  for (const e of dip19Pool) visited.add(e.id)
+
+  const spreadCandidates: ScoredEngram[] = []
+  let spreadTokens = 0
+
+  for (const directive of directives) {
+    // Get associations (fall back to converting relations if associations empty)
+    const assocs = directive.associations?.length
+      ? directive.associations
+      : flattenRelations(directive)
+
+    for (const assoc of assocs) {
+      if (assoc.target_type !== 'engram') continue
+      if (visited.has(assoc.target)) continue
+
+      const target = engramMap.get(assoc.target)
+      if (!target || target.status !== 'active') continue
+
+      // Compute spread score
+      const spreadScore = (directive.score / maxFirstPass) * assoc.strength
+      if (spreadScore < minRelevance * 0.5) continue
+
+      const spreadEngram: ScoredEngram = {
+        ...target,
+        keyword_match: 0,
+        raw_score: 0,
+        score: spreadScore,
+      }
+
+      const cost = estimateTokens(spreadEngram)
+      if (spreadTokens + cost > spreadBudget) continue
+      if (spreadCandidates.length >= spreadCap) break
+
+      spreadCandidates.push(spreadEngram)
+      spreadTokens += cost
+      visited.add(assoc.target)
+    }
+  }
+
+  // Merge consider pools: DIP-0019 bottom-1/3 + spreading activation
+  const allConsider = [...dip19Pool, ...spreadCandidates]
+
+  // Steps 14-15: Strip pipeline
+  const agentDirectives = directives.map(stripAssociations)
+  const agentConsider = allConsider.map(stripAssociations)
+
+  const relatedDocs = aggregateAnchors(agentDirectives, agentConsider)
+
+  const wireDirectives = agentDirectives.map(stripScoring)
+  const wireConsider = agentConsider.map(stripScoring)
+
+  const considerTokens = dip19PoolTokens + spreadTokens
+
+  return {
+    directives: wireDirectives,
+    consider: wireConsider,
+    related_documents: relatedDocs,
+    tokens_used: { directives: directiveTokens, consider: considerTokens },
+  }
+}
+
