@@ -25,7 +25,7 @@ interface InjectResult {
 
 export async function handleInject(
   args: InjectArgs,
-  paths: { engramsPath: string; packsPath: string },
+  paths: { engramsPath: string; packsPath: string; basePath?: string },
 ): Promise<InjectResult> {
   const personalEngrams = loadEngrams(paths.engramsPath)
   const packs = loadAllPacks(paths.packsPath)
@@ -64,8 +64,12 @@ export async function handleInject(
       lines.push(formatEngram(e, totalCount))
     }
   }
-  if (result.related_documents.length > 0) {
-    lines.push('\n' + formatRelatedDocs(result.related_documents))
+  // Filter related_documents to only files that exist on this system
+  const relatedDocs = paths.basePath
+    ? result.related_documents.filter(doc => fs.existsSync(path.join(paths.basePath!, doc.path)))
+    : result.related_documents
+  if (relatedDocs.length > 0) {
+    lines.push('\n' + formatRelatedDocs(relatedDocs))
   }
 
   // Update usage tracking for selected personal engrams
@@ -85,7 +89,7 @@ export async function handleInject(
     text: lines.join('\n'),
     count: totalCount,
     tokens_used: result.tokens_used,
-    related_documents: result.related_documents.length > 0 ? result.related_documents.length : undefined,
+    related_documents: relatedDocs.length > 0 ? relatedDocs.length : undefined,
     _hints: buildHints({
       next: `After task, call datacore.feedback on helpful/unhelpful engrams.${idsList}`,
       related: ['datacore.feedback', 'datacore.session.end'],

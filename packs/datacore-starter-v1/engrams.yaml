@@ -7,8 +7,14 @@ engrams:
     visibility: public
     statement: "Capture first, organize later — get ideas out of your head immediately"
     rationale: "Cognitive offloading reduces mental load and prevents loss of fleeting insights"
+    domain: productivity.gtd
     tags: [capture, gtd, inbox]
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-004, type: semantic, strength: 0.8 }
+      - { target_type: engram, target: ENG-2026-0101-003, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "Thought pops up in a meeting → type it into inbox.org immediately, don't try to file it"
     pack: datacore-starter-v1
 
   - id: ENG-2026-0101-002
@@ -19,8 +25,13 @@ engrams:
     visibility: public
     statement: "Journal daily — even one sentence creates a searchable record"
     rationale: "Consistency matters more than volume; journals enable future pattern recognition"
+    domain: productivity.journaling
     tags: [journal, daily, habit]
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-005, type: semantic, strength: 0.6 }
+    dual_coding:
+      analogy: "Like a ship's log — even calm days get an entry, and the pattern across days reveals the voyage"
     pack: datacore-starter-v1
 
   - id: ENG-2026-0101-003
@@ -31,8 +42,14 @@ engrams:
     visibility: public
     statement: "When something surprises you, record it as an engram"
     rationale: "Surprise signals a gap between expectation and reality — prime learning material"
+    domain: learning.metacognition
     tags: [learn, engram, surprise, insight]
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-001, type: semantic, strength: 0.5 }
+      - { target_type: engram, target: ENG-2026-0101-005, type: semantic, strength: 0.6 }
+    dual_coding:
+      example: "'I assumed the API returned camelCase but it's snake_case' → engram: 'FooAPI returns snake_case field names'"
     pack: datacore-starter-v1
 
   - id: ENG-2026-0101-004
@@ -43,8 +60,13 @@ engrams:
     visibility: public
     statement: "Separate capture from processing — inbox to zero, then route"
     rationale: "Mixing capture and organization creates decision fatigue and incomplete processing"
+    domain: productivity.gtd
     tags: [gtd, inbox, processing, workflow]
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-001, type: semantic, strength: 0.8 }
+    dual_coding:
+      analogy: "Like a mail room — accept all deliveries first (capture), then sort and route (process). Never sort while receiving."
     pack: datacore-starter-v1
 
   - id: ENG-2026-0101-005
@@ -55,6 +77,12 @@ engrams:
     visibility: public
     statement: "Knowledge compounds — connecting ideas across time creates exponential returns"
     rationale: "Isolated notes decay; linked, tagged, and revisited knowledge grows in value"
+    domain: learning.knowledge-management
     tags: [knowledge, compounding, linking, value]
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-002, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0101-003, type: semantic, strength: 0.6 }
+    dual_coding:
+      analogy: "Like compound interest — a single insight is worth little, but insights linked over months create understanding no single session could"
     pack: datacore-starter-v1

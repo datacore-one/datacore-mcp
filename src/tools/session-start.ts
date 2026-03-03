@@ -53,7 +53,7 @@ export async function handleSessionStart(
   if (args.task) {
     const injectResult = await handleInject(
       { prompt: args.task, session_id, scope: args.tags?.length ? `tags:${args.tags.join(',')}` : undefined },
-      { engramsPath: storage.engramsPath, packsPath: storage.packsPath },
+      { engramsPath: storage.engramsPath, packsPath: storage.packsPath, basePath: storage.basePath },
     )
     if (injectResult.count > 0) {
       engrams = { text: injectResult.text, count: injectResult.count }

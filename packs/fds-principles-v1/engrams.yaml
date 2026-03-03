@@ -9,6 +9,12 @@ engrams:
     tags: [ownership, data-sovereignty]
     domain: ethics.data-sovereignty.ownership
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-012, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0101-016, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0101-014, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "User's health records stored in their personal vault, not on the hospital's server — hospital gets access tokens, not copies"
     pack: fds-principles-v1
 
   - id: ENG-2026-0101-011
@@ -21,6 +27,11 @@ engrams:
     tags: [privacy, default, protection]
     domain: ethics.data-sovereignty.privacy
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-013, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0101-018, type: semantic, strength: 0.6 }
+    dual_coding:
+      analogy: "Like a house with walls — you don't build an open field and add walls as a premium feature"
     pack: fds-principles-v1
 
   - id: ENG-2026-0101-012
@@ -33,6 +44,9 @@ engrams:
     tags: [control, access, permissions]
     domain: ethics.data-sovereignty.control
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-010, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0101-013, type: semantic, strength: 0.6 }
     pack: fds-principles-v1
 
   - id: ENG-2026-0101-013
@@ -45,6 +59,12 @@ engrams:
     tags: [consent, explicit, collection]
     domain: ethics.data-sovereignty.consent
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-011, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0101-012, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0101-015, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "'May we use your location to show nearby stores?' with a clear Yes/No — not buried in a 40-page ToS"
     pack: fds-principles-v1
 
   - id: ENG-2026-0101-014
@@ -57,6 +77,11 @@ engrams:
     tags: [economic, benefit, value, compensation]
     domain: ethics.data-sovereignty.economics
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-010, type: semantic, strength: 0.5 }
+      - { target_type: engram, target: ENG-2026-0101-015, type: semantic, strength: 0.6 }
+    dual_coding:
+      analogy: "Like a farmer selling produce at a market — the farmer sets the price, not the market stall operator"
     pack: fds-principles-v1
 
   - id: ENG-2026-0101-015
@@ -69,6 +94,10 @@ engrams:
     tags: [transparency, practices, disclosure]
     domain: ethics.data-sovereignty.transparency
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-013, type: semantic, strength: 0.5 }
+      - { target_type: engram, target: ENG-2026-0101-014, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0101-017, type: semantic, strength: 0.5 }
     pack: fds-principles-v1
 
   - id: ENG-2026-0101-016
@@ -81,6 +110,11 @@ engrams:
     tags: [portability, export, interoperability]
     domain: ethics.data-sovereignty.portability
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-010, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0101-019, type: semantic, strength: 0.7 }
+    dual_coding:
+      example: "One-click export of all your data as a ZIP of standard formats (JSON, CSV) — not a proprietary dump only readable by the same platform"
     pack: fds-principles-v1
 
   - id: ENG-2026-0101-017
@@ -93,6 +127,9 @@ engrams:
     tags: [accountability, responsibility, breach]
     domain: ethics.data-sovereignty.accountability
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-015, type: semantic, strength: 0.5 }
+      - { target_type: engram, target: ENG-2026-0101-018, type: semantic, strength: 0.6 }
     pack: fds-principles-v1
 
   - id: ENG-2026-0101-018
@@ -105,6 +142,12 @@ engrams:
     tags: [ethics, design, architecture, embedded]
     domain: ethics.data-sovereignty.ethics-by-design
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-011, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0101-017, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0101-019, type: semantic, strength: 0.5 }
+    dual_coding:
+      analogy: "Like building codes that require fire exits — you don't add them as an optional upgrade after the building is done"
     pack: fds-principles-v1
 
   - id: ENG-2026-0101-019
@@ -117,4 +160,9 @@ engrams:
     tags: [interoperability, open-standards, protocols]
     domain: ethics.data-sovereignty.interoperability
     activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-01-01" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0101-016, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0101-018, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "Use W3C Verifiable Credentials and DID standards instead of inventing a proprietary identity format"
     pack: fds-principles-v1

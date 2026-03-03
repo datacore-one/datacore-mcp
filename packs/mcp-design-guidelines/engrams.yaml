@@ -1,0 +1,380 @@
+engrams:
+  - id: ENG-2026-0303-004
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      MCP servers must declare `instructions` in the Server constructor — compliant clients auto-inject this into the
+      system prompt. Keep under 500 words. Include: identity, architectural constraints, happy-path tool sequence,
+      common pitfalls. Omit exhaustive API docs (use prompts instead).
+    tags: [mcp, agent-ux, server-instructions]
+    domain: software.mcp.instructions
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-013, type: semantic, strength: 0.8 }
+      - { target_type: engram, target: ENG-2026-0303-014, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-008, type: semantic, strength: 0.6 }
+    dual_coding:
+      example: "Server instructions: 'You have persistent memory through Datacore. Start every session with session.start, end with session.end.' — 50 words that shape every conversation"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-005
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      MCP status tools should be adaptive, not static dumps. Return `ready: boolean`, `_recommendations: string[]`
+      (ordered fix list), and `_next: string` (exact next tool to call). When ready=true, recommendations is empty and
+      _next points to the primary workflow tool. This eliminates agent interpretation overhead.
+    tags: [mcp, agent-ux, adaptive-status]
+    domain: software.mcp.status
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-006, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-013, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-014, type: semantic, strength: 0.5 }
+    dual_coding:
+      analogy: "Like a GPS that says 'you have arrived' vs one that always lists all possible directions — adaptive status tells the agent exactly what matters right now"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-006
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      Every MCP tool response should include `_next: string` (most logical next step) and `_related: string[]` (2-4
+      related tool names). These create an implicit navigation graph. Hints are contextual — same tool returns different
+      _next based on outcome (e.g., upload success -> verify, upload fail -> diagnose).
+    tags: [mcp, agent-ux, navigation-hints]
+    domain: software.mcp.hints
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-005, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-007, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-013, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0303-023, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "upload_file returns {_next: 'verify_upload', _related: ['list_files', 'delete_file']} on success, but {_next: 'diagnose_error', _related: ['retry_upload']} on failure"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-007
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      For complex MCP workflows with 4+ states, create a dedicated state machine tool that accepts a workflow ID and
+      returns the exact next action based on current state. Returns: state, next_tool, next_args, notes. Use this
+      instead of _next hints when there are role-dependent actions, expiry conditions, or non-linear transitions.
+    tags: [mcp, agent-ux, state-machine]
+    domain: software.mcp.state-machine
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-006, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-008, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0303-013, type: semantic, strength: 0.5 }
+    dual_coding:
+      analogy: "Like a traffic light controller — it doesn't just say 'green next', it knows the full state: pedestrian button pressed, time since last change, emergency vehicle approaching. The state machine manages complexity the hints can't"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-008
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      Use MCP Prompts for multi-step workflows involving 3+ tools in sequence. Prompts are named, parameterized
+      conversation starters — they script the workflow so agents don't have to infer it from tool descriptions. Server
+      instructions frame the interaction (always active); prompts script specific workflows (on-demand).
+    tags: [mcp, agent-ux, prompts]
+    domain: software.mcp.prompts
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-004, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0303-007, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0303-013, type: semantic, strength: 0.7 }
+    dual_coding:
+      analogy: "Instructions are kitchen rules (always wash hands, never leave stove unattended). Prompts are recipes (step 1: preheat oven, step 2: mix ingredients). Rules frame every session; recipes guide specific tasks"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-009
+    version: 2
+    status: active
+    type: procedural
+    scope: global
+    visibility: public
+    statement: >-
+      When an agent calls an unknown MCP tool, suggest corrections using Levenshtein distance (threshold: max(4,
+      floor(name.length * 0.4)), return up to 3 suggestions). Agents hallucinate tool names, especially with longer
+      prefixes. A good suggestion saves a full round-trip. Fall back to listing first 5 tools if nothing is close.
+    tags: [mcp, agent-ux, error-handling, typo-correction]
+    domain: software.mcp.error-handling
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-023, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-022, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "Agent calls 'datacore.sesion.start' (typo). Server responds: 'Unknown tool: datacore.sesion.start. Did you mean: datacore.session.start, datacore.session.end?' — saves one full round-trip"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-010
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      MCP resources should be context-aware, not static. Read system state (connection, stamps, config) and adjust
+      content. A guide that says "you're ready, start uploading" beats one that always lists setup steps. Resources are
+      read-only and cacheable — use for reference, not actions.
+    tags: [mcp, agent-ux, resources]
+    domain: software.mcp.resources
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-025, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-005, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0303-013, type: semantic, strength: 0.5 }
+    dual_coding:
+      analogy: "Like a museum guide who skips rooms you've already visited — context-aware resources adapt to what the agent already knows, not just dump the entire manual every time"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-013
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      The core MCP agent-UX philosophy: layer your guidance at five scales. (1) Server instructions frame the
+      interaction, (2) adaptive status orients, (3) _next/_related hints navigate between tools, (4) prompts script
+      multi-step workflows, (5) state machine tools coordinate complex flows. Each layer handles a different granularity
+      of agent guidance.
+    tags: [mcp, agent-ux, design-philosophy]
+    domain: software.mcp.philosophy
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-004, type: semantic, strength: 0.8 }
+      - { target_type: engram, target: ENG-2026-0303-005, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-006, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-007, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0303-008, type: semantic, strength: 0.7 }
+    dual_coding:
+      analogy: "Like an orchestra — the conductor (instructions) sets the tempo, section leaders (status) orient their groups, sheet music markings (hints) guide note-to-note, full scores (prompts) script complex passages, and the conductor's baton signals (state machine) coordinate the finale"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-014
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      MCP servers that maintain state should define a session lifecycle: start (inject context, orient the agent), work
+      (track accessed items), feedback (rate injected context), end (flush state, capture learnings). This enables
+      feedback loops and progressive improvement. The agent bookends conversations with start/end because server
+      instructions tell it to.
+    tags: [mcp, agent-ux, session-lifecycle]
+    domain: software.mcp.session
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-004, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-005, type: semantic, strength: 0.5 }
+      - { target_type: engram, target: ENG-2026-0303-013, type: semantic, strength: 0.6 }
+    dual_coding:
+      analogy: "Like a doctor's visit — check-in (start), examination (work), patient feedback (feedback), discharge summary (end). Each visit builds on the last because the chart persists"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-015
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      Gate sensitive MCP tools by deployment mode. Stdio transport defaults to LOCAL_MODE=true (all tools including
+      signing/keys). HTTP transport defaults to LOCAL_MODE=false (only read-only/verification tools). Never log key
+      material even in local mode. This protects users who expose MCP servers over HTTP from leaking sensitive
+      operations.
+    tags: [mcp, agent-ux, security, local-remote]
+    domain: software.mcp.security
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-022, type: semantic, strength: 0.5 }
+      - { target_type: engram, target: ENG-2026-0303-026, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "Stdio (local): agent can call sign_document, generate_key, export_wallet. HTTP (remote): same agent can only call verify_signature, check_balance. Transport type determines the security boundary"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-018
+    version: 2
+    status: active
+    type: procedural
+    scope: global
+    visibility: public
+    statement: >-
+      MCP servers must work with zero configuration. Every config field needs a sensible default. Missing config file =
+      all defaults. Invalid YAML = log warning + use defaults. Never crash on configuration. Critical for npx-installed
+      servers where users expect immediate functionality.
+    tags: [mcp, agent-ux, configuration, zero-config]
+    domain: software.mcp.configuration
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-022, type: semantic, strength: 0.5 }
+      - { target_type: engram, target: ENG-2026-0303-027, type: semantic, strength: 0.6 }
+    dual_coding:
+      analogy: "Like a microwave — plug it in, press Start, it heats for 30 seconds. No manual required. Power users can set temperature, time, mode. But the default just works"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-020
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      CLI tools for agent consumption should provide a machine-readable schema command returning JSON with command
+      names, params, auth levels (none/sign/chain), constraints (rate limits, spending caps), and retryable flags.
+      Agents discover capabilities from schema, not by parsing help text. Auth level annotation lets agents check
+      prerequisites before attempting calls.
+    tags: [mcp, agent-ux, cli, schema]
+    domain: software.mcp.cli
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-022, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0303-015, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "ade --schema returns {commands: [{name: 'upload', params: [{name: 'file', required: true}], auth: 'sign', retryable: true, rate_limit: '10/min'}]} — agents parse this, not 'ade --help' text"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-022
+    version: 2
+    status: active
+    type: procedural
+    scope: global
+    visibility: public
+    statement: >-
+      Prefix all MCP tool names with the server name (e.g., myserver_upload not upload). In multi-server environments,
+      unprefixed names collide. Declare all three capabilities (tools, resources, prompts) even if empty — omitting
+      prompts:{} means clients won't ask for your prompts.
+    tags: [mcp, agent-ux, naming, capabilities]
+    domain: software.mcp.naming
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-009, type: semantic, strength: 0.5 }
+      - { target_type: engram, target: ENG-2026-0303-020, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0303-026, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "Bad: tools named 'upload', 'search', 'delete'. Good: 'datacore.upload', 'datacore.search', 'datacore.delete'. With 5 MCP servers loaded, 'search' is ambiguous — 'datacore.search' is not"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-023
+    version: 2
+    status: active
+    type: procedural
+    scope: global
+    visibility: public
+    statement: >-
+      MCP error responses should guide recovery: include the failed value ("Resource 0xabc not found" not "not found"),
+      suggest the fix ("Call setup_tool first"), distinguish user errors from system errors, and include _next pointing
+      to the diagnostic/recovery tool. Mark transient failures (rate limits, timeouts) as retryable with
+      suggestedCommand for automatic agent recovery.
+    tags: [mcp, agent-ux, error-handling]
+    domain: software.mcp.error-handling
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-009, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-006, type: semantic, strength: 0.5 }
+      - { target_type: engram, target: ENG-2026-0303-027, type: semantic, strength: 0.6 }
+    dual_coding:
+      example: "Bad: 'Error: not found'. Good: 'Error: Resource 0xabc not found. This resource may not be registered yet. Call datacore.register with id=0xabc first. _next: datacore.register'"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-024
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      For cross-MCP-server workflows, the agent is the coordinator — servers never call each other directly. Each server
+      documents companion servers in its status tool (what they do, how to install, what they're needed for). Include
+      cross-server tool names in _next hints so agents can navigate across server boundaries.
+    tags: [mcp, agent-ux, cross-server, coordination]
+    domain: software.mcp.cross-server
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-006, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0303-005, type: semantic, strength: 0.5 }
+    dual_coding:
+      analogy: "Like international diplomacy — countries (servers) don't invade each other, they negotiate through ambassadors (the agent). Each country publishes a directory of its counterparts so the ambassador knows who to call"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-025
+    version: 2
+    status: active
+    type: procedural
+    scope: global
+    visibility: public
+    statement: >-
+      When MCP tools mutate state that resources expose, broadcast resource update notifications so subscribed clients
+      can refresh. Maintain a set of mutating tool names and notify after execution. This enables live UIs (dashboards,
+      sidebars) to stay current without polling.
+    tags: [mcp, agent-ux, resource-notifications]
+    domain: software.mcp.notifications
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-010, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-026, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "ENGRAM_MUTATING_TOOLS = ['learn', 'forget', 'feedback']. After any of these run, call server.notifyResourceChanged('engrams://active'). Subscribed UIs refresh their engram list automatically"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-026
+    version: 2
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: >-
+      For extensible MCP servers, support dynamic tool loading from modules. Dual-gate: tool must be declared in
+      manifest AND have exported handler. Give module tools scoped context (own data dir, config, logger) so they can't
+      interfere with core state. Namespace module tools under the server prefix (e.g., server.module.tool_name).
+    tags: [mcp, agent-ux, modules, extensibility]
+    domain: software.mcp.modules
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-022, type: semantic, strength: 0.5 }
+      - { target_type: engram, target: ENG-2026-0303-027, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-015, type: semantic, strength: 0.5 }
+    dual_coding:
+      analogy: "Like browser extensions — each gets a sandboxed environment (own storage, limited API), must declare permissions in manifest, and can't directly modify the browser's core UI or data"
+    pack: mcp-design-guidelines
+
+  - id: ENG-2026-0303-027
+    version: 2
+    status: active
+    type: procedural
+    scope: global
+    visibility: public
+    statement: >-
+      Non-critical MCP subsystems (gamification, analytics, optional features) must never crash core tools. Wrap
+      optional subsystems in try/catch error boundaries. Design subsystem boundaries so failures are isolated — if an
+      optional feature fails, primary tool functionality still works.
+    tags: [mcp, agent-ux, error-handling, resilience]
+    domain: software.mcp.resilience
+    activation: { retrieval_strength: 0.7, storage_strength: 1, frequency: 0, last_accessed: "2026-03-03" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0303-026, type: semantic, strength: 0.7 }
+      - { target_type: engram, target: ENG-2026-0303-023, type: semantic, strength: 0.6 }
+      - { target_type: engram, target: ENG-2026-0303-018, type: semantic, strength: 0.5 }
+    dual_coding:
+      analogy: "Like watertight compartments on a ship — if the entertainment system floods, the engine room stays dry. Gamification crashing should never prevent a user from saving their work"
+    pack: mcp-design-guidelines
