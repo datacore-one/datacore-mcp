@@ -1,7 +1,8 @@
 // src/inject.ts
 import type { Engram, KnowledgeAnchor, Association } from './schemas/engram.js'
+import type { SchemaDefinition } from './schemas/schema-definition.js'
 import type { LoadedPack } from './engrams.js'
-import { decayedStrength } from './decay.js'
+import { decayedStrength, decayedCoAccessStrength } from './decay.js'
 import { getConfig } from './config.js'
 
 export interface InjectionContext {
@@ -71,6 +72,28 @@ export function anchorBoost(engram: Engram, taskWords: Set<string>): number {
   }
 
   return Math.min(boost, 2.0)
+}
+
+// --- Schema boost ---
+
+const SCHEMA_BOOST = 2.0
+
+function schemaBoost(
+  engramId: string,
+  schemaMap: Map<string, SchemaDefinition[]>,
+  scoredAboveMin: Set<string>,
+): number {
+  const schemas = schemaMap.get(engramId)
+  if (!schemas) return 0
+  for (const schema of schemas) {
+    // Check if any OTHER member of this schema cleared the relevance threshold
+    for (const memberId of schema.members) {
+      if (memberId !== engramId && scoredAboveMin.has(memberId)) {
+        return SCHEMA_BOOST
+      }
+    }
+  }
+  return 0
 }
 
 // --- Relations-to-associations converter ---
@@ -234,6 +257,7 @@ export function selectAndSpread(
   ctx: InjectionContext,
   personalEngrams: Engram[],
   packs: LoadedPack[],
+  schemas: SchemaDefinition[] = [],
 ): InjectionResult {
   const config = getConfig()
   const spreadCap = config.injection?.spread_cap ?? 3
@@ -272,20 +296,46 @@ export function selectAndSpread(
     }
   }
 
-  // Step 3: Filter by minimum relevance
-  const filtered = scored.filter(s => s.score >= minRelevance)
-
-  // Step 4: Normalize keyword_match to [0,10]
-  const maxKm = Math.max(...filtered.map(e => e.keyword_match), 1)
-  for (const e of filtered) {
+  // Step 3: Normalize keyword_match to [0,10] (all scored engrams, not yet filtered)
+  const maxKm = Math.max(...scored.map(e => e.keyword_match), 1)
+  for (const e of scored) {
     e.keyword_match = (e.keyword_match / maxKm) * 10
   }
 
-  // Step 5: Compute first-pass score with anchor boost
-  for (const e of filtered) {
-    const aBoost = anchorBoost(e, promptWords)
-    e.score = e.keyword_match + aBoost  // schemaBoost = 0 for Phase 1
+  // Step 4: Compute score with anchor boost + schema boost (two-scan single-pass)
+  // Pre-build schema membership map from active schemas
+  const schemaMap = new Map<string, SchemaDefinition[]>()
+  for (const schema of schemas) {
+    if (schema.status !== 'active' && schema.status !== 'consolidated') continue
+    for (const memberId of schema.members) {
+      const existing = schemaMap.get(memberId)
+      if (existing) existing.push(schema)
+      else schemaMap.set(memberId, [schema])
+    }
   }
+
+  // Scan 1: compute keyword_match + anchorBoost for all engrams
+  const aBoosts = new Map<string, number>()
+  for (const e of scored) {
+    const aBoost = anchorBoost(e, promptWords)
+    aBoosts.set(e.id, aBoost)
+    e.score = e.keyword_match + aBoost
+  }
+
+  // Build scoredAboveMin = engrams where (keyword_match + aBoost) >= minRelevance
+  // This is STATIC — computed before schema boost to eliminate loop-order dependency
+  const scoredAboveMin = new Set(
+    scored.filter(e => e.score >= minRelevance).map(e => e.id),
+  )
+
+  // Scan 2: apply schema boost — can rescue sub-threshold engrams if schema peers cleared
+  for (const e of scored) {
+    const sBoost = schemaBoost(e.id, schemaMap, scoredAboveMin)
+    e.score = e.keyword_match + (aBoosts.get(e.id) ?? 0) + sBoost
+  }
+
+  // Step 5: Filter by minimum relevance AFTER schema boost
+  const filtered = scored.filter(s => s.score >= minRelevance)
 
   // Sort by score descending
   filtered.sort((a, b) => b.score - a.score)
@@ -346,8 +396,14 @@ export function selectAndSpread(
       const target = engramMap.get(assoc.target)
       if (!target || target.status !== 'active') continue
 
+      // Apply decay to co_accessed associations at read time
+      const effectiveStrength = assoc.type === 'co_accessed' && assoc.updated_at
+        ? decayedCoAccessStrength(assoc.strength, assoc.updated_at)
+        : assoc.strength
+      if (effectiveStrength <= 0) continue
+
       // Compute spread score
-      const spreadScore = (directive.score / maxFirstPass) * assoc.strength
+      const spreadScore = (directive.score / maxFirstPass) * effectiveStrength
       if (spreadScore < minRelevance * 0.5) continue
 
       const spreadEngram: ScoredEngram = {

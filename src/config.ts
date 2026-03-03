@@ -29,6 +29,21 @@ export const ConfigSchema = z.object({
     spread_cap: z.number().default(3),
     spread_budget: z.number().default(480),
   }).default({}),
+  co_access: z.object({
+    new_strength: z.number().default(0.1),
+    increment: z.number().default(0.05),
+    max_strength: z.number().default(0.95),
+    decay_rate: z.number().default(0.05),
+    prune_threshold: z.number().default(0.05),
+  }).default({}),
+  learning: z.object({
+    decay_rate: z.number().default(0.05),
+    abstraction_threshold: z.number().default(2),
+    legacy_audit_rate: z.number().default(3),
+    auto_defer_learning_review: z.boolean().default(false),
+    daily_review_max_items: z.number().default(5),
+    onboarding_max_items: z.number().default(15),
+  }).default({}),
 })
 
 export type DatacoreConfig = z.infer<typeof ConfigSchema>

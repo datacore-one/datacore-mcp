@@ -4,6 +4,7 @@ import * as path from 'path'
 import * as yaml from 'js-yaml'
 import { loadEngrams, loadAllPacks } from '../engrams.js'
 import { selectAndSpread, type InjectionContext, type WireEngram } from '../inject.js'
+import { loadSchemas } from '../schemas/schema-definition.js'
 import { buildHints } from '../hints.js'
 import type { Engram, KnowledgeAnchor } from '../schemas/engram.js'
 
@@ -15,20 +16,22 @@ interface InjectArgs {
   min_relevance?: number
 }
 
-interface InjectResult {
+export interface InjectResult {
   text: string
   count: number
   tokens_used: { directives: number; consider: number }
+  injected_personal_ids: string[]
   related_documents?: number
   _hints?: ReturnType<typeof buildHints>
 }
 
 export async function handleInject(
   args: InjectArgs,
-  paths: { engramsPath: string; packsPath: string; basePath?: string },
+  paths: { engramsPath: string; packsPath: string; basePath?: string; schemasPath?: string },
 ): Promise<InjectResult> {
   const personalEngrams = loadEngrams(paths.engramsPath)
   const packs = loadAllPacks(paths.packsPath)
+  const schemas = paths.schemasPath ? loadSchemas(paths.schemasPath) : []
 
   const ctx: InjectionContext = {
     prompt: args.prompt,
@@ -38,12 +41,13 @@ export async function handleInject(
     minRelevance: args.min_relevance,
   }
 
-  const result = selectAndSpread(ctx, personalEngrams, packs)
+  const result = selectAndSpread(ctx, personalEngrams, packs, schemas)
   const totalCount = result.directives.length + result.consider.length
 
   if (totalCount === 0) {
     return {
       text: '', count: 0, tokens_used: { directives: 0, consider: 0 },
+      injected_personal_ids: [],
       _hints: buildHints({
         next: 'No engrams matched this task. Use datacore.recall to search all sources, or datacore.learn to record new knowledge.',
         related: ['datacore.recall', 'datacore.learn'],
@@ -89,6 +93,7 @@ export async function handleInject(
     text: lines.join('\n'),
     count: totalCount,
     tokens_used: result.tokens_used,
+    injected_personal_ids: injectedIds,
     related_documents: relatedDocs.length > 0 ? relatedDocs.length : undefined,
     _hints: buildHints({
       next: `After task, call datacore.feedback on helpful/unhelpful engrams.${idsList}`,

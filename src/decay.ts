@@ -22,6 +22,27 @@ export function decayedStrength(
 }
 
 /**
+ * Compute decayed co-access association strength.
+ * Same exponential pattern as decayedStrength.
+ * Returns 0 if below prune threshold (caller should prune).
+ */
+export function decayedCoAccessStrength(
+  strength: number,
+  updatedAt: string,
+  now?: Date,
+  decayRate?: number,
+  pruneThreshold?: number,
+): number {
+  const rate = decayRate ?? DECAY_RATE
+  const threshold = pruneThreshold ?? FLOOR
+  const last = new Date(updatedAt)
+  const current = now ?? new Date()
+  const days = Math.max(0, (current.getTime() - last.getTime()) / MS_PER_DAY)
+  const decayed = strength * Math.exp(-rate * days)
+  return decayed < threshold ? 0 : decayed
+}
+
+/**
  * Classify engram state based on current retrieval strength.
  */
 export function engramState(retrievalStrength: number): EngramState {

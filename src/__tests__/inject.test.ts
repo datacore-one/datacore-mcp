@@ -11,6 +11,7 @@ import {
   type AgentEngram,
 } from '../inject.js'
 import type { Engram, KnowledgeAnchor, Association } from '../schemas/engram.js'
+import type { SchemaDefinition } from '../schemas/schema-definition.js'
 
 // Mock config — must be before any imports that call getConfig
 vi.mock('../config.js', () => ({
@@ -469,6 +470,92 @@ describe('selectAndSpread', () => {
     expect(result.tokens_used).toHaveProperty('consider')
     expect(typeof result.tokens_used.directives).toBe('number')
     expect(typeof result.tokens_used.consider).toBe('number')
+  })
+})
+
+// --- Schema boost in selectAndSpread ---
+
+describe('schema boost', () => {
+  const makeSchemaEngram = (id: string, tags: string[], statement: string) =>
+    makeEngram({ id, tags, statement })
+
+  it('rescues sub-threshold engram when schema peer is above minRelevance', () => {
+    // First engram: strong keyword match for "typescript"
+    // Second engram: weak match (only via "development") — below threshold without boost
+    const engrams = [
+      makeSchemaEngram('ENG-2026-0301-001', ['typescript'], 'Use TypeScript strictly'),
+      makeSchemaEngram('ENG-2026-0301-002', ['development'], 'Use ESLint for linting in development'),
+    ]
+    const schema: SchemaDefinition = {
+      id: 'SCH-2026-0301-001',
+      name: 'Code quality',
+      members: ['ENG-2026-0301-001', 'ENG-2026-0301-002'],
+      confidence: 0.8,
+      status: 'active',
+      shared_anchors: [],
+      created: '2026-03-01',
+      updated: '2026-03-01',
+    }
+
+    // Without schema: second engram may not appear (weak match)
+    const resultNoSchema = selectAndSpread(
+      { prompt: 'typescript development' },
+      engrams,
+      [],
+      [],
+    )
+    const idsNoSchema = [...resultNoSchema.directives, ...resultNoSchema.consider].map(e => e.id)
+
+    // With schema: second engram gets +2.0 boost because peer (first) cleared threshold
+    const resultWithSchema = selectAndSpread(
+      { prompt: 'typescript development' },
+      engrams,
+      [],
+      [schema],
+    )
+    const idsWithSchema = [...resultWithSchema.directives, ...resultWithSchema.consider].map(e => e.id)
+
+    // Both should appear with schema boost
+    expect(idsWithSchema).toContain('ENG-2026-0301-001')
+    expect(idsWithSchema).toContain('ENG-2026-0301-002')
+  })
+
+  it('no schema boost when no peers cleared threshold', () => {
+    const engrams = [
+      makeSchemaEngram('ENG-2026-0301-001', ['unrelated'], 'Something about cooking'),
+      makeSchemaEngram('ENG-2026-0301-002', ['unrelated'], 'Something about music'),
+    ]
+    const schema: SchemaDefinition = {
+      id: 'SCH-2026-0301-001',
+      name: 'Test',
+      members: ['ENG-2026-0301-001', 'ENG-2026-0301-002'],
+      confidence: 0.8,
+      status: 'active',
+      shared_anchors: [],
+      created: '2026-03-01',
+      updated: '2026-03-01',
+    }
+
+    const result = selectAndSpread(
+      { prompt: 'typescript development' },
+      engrams,
+      [],
+      [schema],
+    )
+    expect(result.directives).toHaveLength(0)
+  })
+
+  it('works with empty schemas (backward compatible)', () => {
+    const engrams = [
+      makeSchemaEngram('ENG-2026-0301-001', ['typescript'], 'Use TypeScript strictly'),
+    ]
+    const result = selectAndSpread(
+      { prompt: 'typescript development' },
+      engrams,
+      [],
+      [],
+    )
+    expect(result.directives.length).toBeGreaterThan(0)
   })
 })
 

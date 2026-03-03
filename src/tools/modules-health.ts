@@ -38,11 +38,11 @@ export async function handleModulesHealth(
 }
 
 async function checkModule(
-  mod: { name: string; manifest: Record<string, unknown>; modulePath: string },
+  mod: DiscoveredModule,
   storage: StorageConfig,
 ): Promise<HealthCheck> {
   const issues: string[] = []
-  const manifest = mod.manifest as Record<string, unknown>
+  const manifest = mod.manifest as unknown as Record<string, unknown>
 
   // Check required files
   if (!fs.existsSync(path.join(mod.modulePath, 'SKILL.md'))) {

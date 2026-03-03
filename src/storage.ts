@@ -12,6 +12,12 @@ export interface StorageConfig {
   journalPath: string
   knowledgePath: string
   packsPath: string
+  schemasPath: string
+  exchangeInboxPath: string
+  exchangeOutboxPath: string
+  knowledgeSurfacingPath: string
+  archivePath: string
+  statePath: string
 }
 
 export function detectStorage(): StorageConfig {
@@ -45,6 +51,12 @@ function fullConfig(basePath: string): StorageConfig {
     journalPath: path.join(basePath, '0-personal', 'journal'),
     knowledgePath: path.join(basePath, '0-personal', '3-knowledge'),
     packsPath: path.join(basePath, '.datacore', 'learning', 'packs'),
+    schemasPath: path.join(basePath, '.datacore', 'learning', 'schemas.yaml'),
+    exchangeInboxPath: path.join(basePath, '.datacore', 'learning', 'exchange', 'inbox'),
+    exchangeOutboxPath: path.join(basePath, '.datacore', 'learning', 'exchange', 'outbox'),
+    knowledgeSurfacingPath: path.join(basePath, '.datacore', 'state', 'knowledge-surfacing.yaml'),
+    archivePath: path.join(basePath, '.datacore', 'learning', 'archive'),
+    statePath: path.join(basePath, '.datacore', 'state'),
   }
 }
 
@@ -56,12 +68,18 @@ function coreConfig(basePath: string): StorageConfig {
     journalPath: path.join(basePath, 'journal'),
     knowledgePath: path.join(basePath, 'knowledge'),
     packsPath: path.join(basePath, 'packs'),
+    schemasPath: path.join(basePath, 'schemas.yaml'),
+    exchangeInboxPath: path.join(basePath, 'exchange', 'inbox'),
+    exchangeOutboxPath: path.join(basePath, 'exchange', 'outbox'),
+    knowledgeSurfacingPath: path.join(basePath, 'state', 'knowledge-surfacing.yaml'),
+    archivePath: path.join(basePath, 'archive'),
+    statePath: path.join(basePath, 'state'),
   }
 }
 
 export function initCore(basePath: string): { isFirstRun: boolean } {
   const isFirstRun = !fs.existsSync(path.join(basePath, 'engrams.yaml'))
-  for (const dir of ['journal', 'knowledge', 'packs']) {
+  for (const dir of ['journal', 'knowledge', 'packs', 'exchange/inbox', 'exchange/outbox', 'archive', 'state']) {
     const dirPath = path.join(basePath, dir)
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true })

@@ -15,6 +15,8 @@ interface LearnArgs {
   visibility?: 'private' | 'public' | 'template'
   knowledge_anchors?: Array<{ path: string; relevance?: string; snippet?: string; snippet_extracted_at?: string }>
   dual_coding?: { example?: string; analogy?: string }
+  abstract?: string | null
+  derived_from?: string | null
 }
 
 interface LearnResult {
@@ -43,13 +45,35 @@ export function generateEngramId(existingEngrams: Engram[]): string {
   return `${prefix}${String(nextSeq).padStart(padWidth, '0')}`
 }
 
+export function generateAbstractId(existingEngrams: Engram[]): string {
+  const now = new Date()
+  const date = now.toISOString().split('T')[0].replace(/-/g, '').slice(0, 8)
+  const prefix = `ABS-${date.slice(0, 4)}-${date.slice(4)}-`
+
+  let maxSeq = 0
+  for (const e of existingEngrams) {
+    if (e.id.startsWith(prefix)) {
+      const seq = parseInt(e.id.slice(prefix.length), 10)
+      if (seq > maxSeq) maxSeq = seq
+    }
+  }
+
+  const nextSeq = maxSeq + 1
+  const padWidth = nextSeq > 999 ? String(nextSeq).length : 3
+  return `${prefix}${String(nextSeq).padStart(padWidth, '0')}`
+}
+
 export async function handleLearn(args: LearnArgs, engramsPath: string, service?: EngagementService): Promise<LearnResult> {
   const engrams = loadEngrams(engramsPath)
   const today = new Date().toISOString().split('T')[0]
   const autoPromote = getConfig().engrams.auto_promote
 
+  // Use ABS- prefix for abstract engrams
+  const isAbstract = args.abstract !== undefined && args.abstract !== null
+  const id = isAbstract ? generateAbstractId(engrams) : generateEngramId(engrams)
+
   const engram: Engram = {
-    id: generateEngramId(engrams),
+    id,
     version: 2,
     status: autoPromote ? 'active' : 'candidate',
     consolidated: false,
@@ -76,8 +100,8 @@ export async function handleLearn(args: LearnArgs, engramsPath: string, service?
       last_accessed: today,
     },
     pack: null,
-    abstract: null,
-    derived_from: null,
+    abstract: args.abstract ?? null,
+    derived_from: args.derived_from ?? null,
   }
 
   engrams.push(engram)

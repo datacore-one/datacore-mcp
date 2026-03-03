@@ -25,6 +25,7 @@ export const AssociationSchema = z.object({
   target: z.string(),
   strength: z.number().min(0).max(0.95),
   type: z.enum(['semantic', 'temporal', 'causal', 'co_accessed']),
+  updated_at: z.string().optional(),
 })
 
 export const DualCodingSchema = z.object({
@@ -56,7 +57,7 @@ export const FeedbackSignalsSchema = z.object({
 })
 
 export const EngramSchema = z.object({
-  id: z.string().regex(/^ENG-[A-Za-z0-9-]+$/),
+  id: z.string().regex(/^(ENG|ABS)-[A-Za-z0-9-]+$/),
   version: z.number().int().min(1),
   status: z.enum(['active', 'dormant', 'retired', 'candidate']),
   consolidated: z.boolean().default(false),

@@ -24,6 +24,7 @@ import {
 import type { StorageConfig } from '../storage.js'
 import type { DatacortexBridge } from '../datacortex.js'
 import type { EngagementService } from '../engagement/index.js'
+import type { SessionTracker } from '../session-tracker.js'
 
 interface SessionStartArgs {
   task?: string
@@ -46,17 +47,29 @@ export async function handleSessionStart(
   storage: StorageConfig,
   bridge?: DatacortexBridge | null,
   engagementService?: EngagementService,
+  tracker?: SessionTracker,
 ): Promise<SessionStartResult> {
+  // Ensure DIP-0019 directories exist (full mode only)
+  if (storage.mode === 'full') {
+    for (const dir of [storage.archivePath, storage.exchangeInboxPath, storage.exchangeOutboxPath, storage.statePath]) {
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    }
+  }
+
   const session_id = crypto.randomUUID()
   let engrams: { text: string; count: number } | null = null
 
   if (args.task) {
     const injectResult = await handleInject(
       { prompt: args.task, session_id, scope: args.tags?.length ? `tags:${args.tags.join(',')}` : undefined },
-      { engramsPath: storage.engramsPath, packsPath: storage.packsPath, basePath: storage.basePath },
+      { engramsPath: storage.engramsPath, packsPath: storage.packsPath, basePath: storage.basePath, schemasPath: storage.schemasPath },
     )
     if (injectResult.count > 0) {
       engrams = { text: injectResult.text, count: injectResult.count }
+    }
+    // Track co-injected engrams for Hebbian write-back at session.end
+    if (tracker && injectResult.injected_personal_ids.length > 0) {
+      tracker.trackInjected(session_id, injectResult.injected_personal_ids)
     }
   }
 

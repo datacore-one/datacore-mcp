@@ -4,11 +4,15 @@
 // Leaf handlers must NEVER import session handlers.
 import { handleCapture } from './capture.js'
 import { handleLearn } from './learn.js'
+import { atomicWriteYaml } from './inject-tool.js'
 import { buildHints } from '../hints.js'
 import { getConfig } from '../config.js'
+import { loadEngrams } from '../engrams.js'
 import { formatSessionEnd } from '../engagement/format.js'
+import type { Engram } from '../schemas/engram.js'
 import type { StorageConfig } from '../storage.js'
 import type { EngagementService } from '../engagement/index.js'
+import type { SessionTracker } from '../session-tracker.js'
 
 interface SessionEndArgs {
   summary: string
@@ -28,12 +32,17 @@ export async function handleSessionEnd(
   args: SessionEndArgs,
   storage: StorageConfig,
   engagementService?: EngagementService,
+  tracker?: SessionTracker,
 ): Promise<SessionEndResult> {
-  // Phase 2: Hebbian co-access write-back
-  // When session_id is provided, write co-access associations between engrams
-  // that were injected together in this session. This strengthens semantic links
-  // between frequently co-retrieved engrams.
-  // TODO(Phase 2): Implement co-access association write-back using args.session_id
+  // Hebbian co-access write-back: strengthen associations between engrams
+  // that were injected together in this session
+  if (args.session_id && tracker) {
+    const pairs = tracker.getCoAccessPairs(args.session_id)
+    if (pairs.length > 0) {
+      writeCoAccessAssociations(storage.engramsPath, pairs)
+    }
+    tracker.clear(args.session_id)
+  }
 
   // Capture journal entry
   const captureResult = await handleCapture(
@@ -85,4 +94,57 @@ export async function handleSessionEnd(
       related: ['datacore.session.start', 'datacore.status'],
     }),
   }
+}
+
+// --- Hebbian co-access write-back ---
+
+function writeCoAccessAssociations(
+  engramsPath: string,
+  pairs: Array<[string, string]>,
+): void {
+  const engrams = loadEngrams(engramsPath)
+  const map = new Map(engrams.map(e => [e.id, e]))
+  const config = getConfig().co_access
+  let changed = false
+
+  for (const [idA, idB] of pairs) {
+    const a = map.get(idA)
+    const b = map.get(idB)
+    // Only write co-access between personal engrams (not pack engrams)
+    if (!a || !b || a.pack || b.pack) continue
+    changed = strengthenCoAccess(a, idB, config) || changed
+    changed = strengthenCoAccess(b, idA, config) || changed
+  }
+
+  if (changed) {
+    atomicWriteYaml(engramsPath, { engrams })
+  }
+}
+
+function strengthenCoAccess(
+  engram: Engram,
+  targetId: string,
+  config: { new_strength: number; increment: number; max_strength: number },
+): boolean {
+  const today = new Date().toISOString().split('T')[0]
+  const existing = engram.associations.find(
+    a => a.target === targetId && a.type === 'co_accessed',
+  )
+
+  if (existing) {
+    const newStrength = Math.min(existing.strength + config.increment, config.max_strength)
+    if (newStrength === existing.strength && existing.updated_at === today) return false
+    existing.strength = newStrength
+    existing.updated_at = today
+    return true
+  }
+
+  engram.associations.push({
+    target_type: 'engram',
+    target: targetId,
+    strength: config.new_strength,
+    type: 'co_accessed',
+    updated_at: today,
+  })
+  return true
 }

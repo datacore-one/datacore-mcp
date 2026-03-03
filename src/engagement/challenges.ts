@@ -201,11 +201,11 @@ export function checkChallengeCompletion(
 
   // Special case: feedback_positive_ratio is an absolute threshold, not a delta
   if (metric === 'feedback_positive_ratio') {
-    const currentValue = (profile.stats as Record<string, number>)[metric] ?? 0
+    const currentValue = (profile.stats as unknown as Record<string, number>)[metric] ?? 0
     return currentValue >= targetDelta
   }
 
-  const currentValue = (profile.stats as Record<string, number>)[metric] ?? 0
+  const currentValue = (profile.stats as unknown as Record<string, number>)[metric] ?? 0
   const delta = currentValue - baselineValue
 
   return delta >= targetDelta

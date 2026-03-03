@@ -1,6 +1,6 @@
 // test/decay.test.ts
 import { describe, it, expect } from 'vitest'
-import { decayedStrength, engramState } from '../src/decay.js'
+import { decayedStrength, decayedCoAccessStrength, engramState } from '../src/decay.js'
 
 describe('decayedStrength', () => {
   const base = 0.8
@@ -29,6 +29,34 @@ describe('decayedStrength', () => {
     const recent = new Date().toISOString().split('T')[0]
     const result = decayedStrength(base, recent)
     expect(result).toBeCloseTo(0.8, 1)
+  })
+})
+
+describe('decayedCoAccessStrength', () => {
+  const today = new Date('2026-02-21')
+
+  it('returns unchanged strength for 0 days', () => {
+    expect(decayedCoAccessStrength(0.5, '2026-02-21', today)).toBeCloseTo(0.5, 2)
+  })
+
+  it('decays over 14 days', () => {
+    const result = decayedCoAccessStrength(0.5, '2026-02-07', today)
+    expect(result).toBeCloseTo(0.248, 2)
+  })
+
+  it('returns 0 below prune threshold', () => {
+    // Very old association should decay below threshold
+    expect(decayedCoAccessStrength(0.1, '2025-12-01', today)).toBe(0)
+  })
+
+  it('accepts custom decay rate and prune threshold', () => {
+    const result = decayedCoAccessStrength(0.5, '2026-02-14', today, 0.1, 0.01)
+    // 7 days at rate 0.1: 0.5 * exp(-0.1 * 7) = ~0.248
+    expect(result).toBeCloseTo(0.248, 2)
+  })
+
+  it('returns 0 for strength below custom threshold', () => {
+    expect(decayedCoAccessStrength(0.02, '2026-02-20', today, 0.05, 0.05)).toBe(0)
   })
 })
 

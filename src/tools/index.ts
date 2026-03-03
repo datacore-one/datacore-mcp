@@ -32,6 +32,8 @@ export const TOOLS = [
         example: z.string().optional().describe('Concrete example illustrating the engram'),
         analogy: z.string().optional().describe('Analogy to aid understanding'),
       }).optional().describe('Dual coding: example and/or analogy for richer encoding'),
+      abstract: z.string().nullable().optional().describe('Abstract engram ID this was derived from'),
+      derived_from: z.string().nullable().optional().describe('Source engram ID this was derived from'),
     }),
   },
   {
@@ -176,6 +178,42 @@ export const TOOLS = [
     description: 'Check module health: missing files, env vars, data separation issues',
     inputSchema: z.object({
       module: z.string().optional().describe('Module name (omit for all modules)'),
+    }),
+  },
+  {
+    name: 'datacore.knowledge.scan',
+    description: 'Scan zettel knowledge base for engram candidates, or run consolidation pass to find low-RS and duplicate engrams.',
+    inputSchema: z.object({
+      action: z.enum(['scan_zettels', 'scan_status', 'consolidation_pass'])
+        .describe('Action: scan_zettels | scan_status | consolidation_pass'),
+      confirm: z.boolean().optional().describe('Confirm consolidation execution (default: preview only)'),
+    }),
+  },
+  {
+    name: 'datacore.exchange',
+    description: 'Exchange engrams via Learning Exchange Packets (LEP). Export your public engrams, import from others, or check inbox/outbox status.',
+    inputSchema: z.object({
+      action: z.enum(['export', 'import', 'status']).describe('Action: export | import | status'),
+      engram_ids: z.array(z.string()).optional().describe('Specific engram IDs to export'),
+      filter_domain: z.string().optional().describe('Filter export by domain prefix'),
+      path: z.string().optional().describe('Path to LEP packet file (for import)'),
+      sender: z.string().optional().describe('Sender identity (for export)'),
+      confirm: z.boolean().optional().describe('Confirm import (default: preview only)'),
+      fitness_threshold: z.number().optional().describe('Minimum fitness score for import (default: 0.3)'),
+      source_cap_percent: z.number().optional().describe('Max percentage of engrams from one source (default: 0.20)'),
+    }),
+  },
+  {
+    name: 'datacore.schemas',
+    description: 'Manage knowledge schemas — detect clusters, activate, archive, merge, split, or migrate legacy relations.',
+    inputSchema: z.object({
+      action: z.enum(['list', 'detect', 'activate', 'archive', 'merge', 'split', 'migrate'])
+        .describe('Action: list | detect | activate | archive | merge | split | migrate'),
+      id: z.string().optional().describe('Schema ID (for activate/archive/merge/split)'),
+      target_id: z.string().optional().describe('Target schema ID (for merge)'),
+      member_ids: z.array(z.string()).optional().describe('Member engram IDs to extract (for split)'),
+      name: z.string().optional().describe('Name for new schema (for split)'),
+      confirm: z.boolean().optional().describe('Confirm destructive action (for migrate)'),
     }),
   },
   {

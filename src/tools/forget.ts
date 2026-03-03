@@ -11,6 +11,7 @@ interface ForgetResult {
   success: boolean
   retired?: { id: string; statement: string }
   matches?: Array<{ id: string; statement: string }>
+  total_matches?: number
   error?: string
 }
 
