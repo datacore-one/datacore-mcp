@@ -52,7 +52,7 @@ describe('EngramSchema', () => {
         last_accessed: '2026-02-19',
       },
       provenance: {
-        origin: 'gregor/personal',
+        origin: 'user/personal',
         chain: [],
         signature: null,
         license: 'cc-by-sa-4.0',
