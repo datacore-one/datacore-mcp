@@ -50,9 +50,15 @@ interface SearchResponse {
   fallback_warning?: string
 }
 
+interface SearchPaths {
+  journalPath: string
+  knowledgePath: string
+  spaces?: Array<{ name: string; journalPath: string; knowledgePath: string }>
+}
+
 export async function handleSearch(
   args: SearchArgs,
-  paths: { journalPath: string; knowledgePath: string },
+  paths: SearchPaths,
   bridge?: DatacortexBridge | null,
 ): Promise<SearchResponse> {
   // Semantic search via Datacortex bridge
@@ -73,17 +79,21 @@ export async function handleSearch(
 
 async function keywordSearch(
   args: SearchArgs,
-  paths: { journalPath: string; knowledgePath: string },
+  paths: SearchPaths,
 ): Promise<SearchResponse> {
   const scope = args.scope ?? 'all'
   const limit = args.limit ?? 20
   const results: SearchResultItem[] = []
 
-  if (scope === 'journal' || scope === 'all') {
-    results.push(...searchDir(paths.journalPath, args.query))
-  }
-  if (scope === 'knowledge' || scope === 'all') {
-    results.push(...searchDir(paths.knowledgePath, args.query))
+  // Search across all discovered spaces
+  const spaces = paths.spaces ?? [{ name: 'default', journalPath: paths.journalPath, knowledgePath: paths.knowledgePath }]
+  for (const space of spaces) {
+    if (scope === 'journal' || scope === 'all') {
+      results.push(...searchDir(space.journalPath, args.query))
+    }
+    if (scope === 'knowledge' || scope === 'all') {
+      results.push(...searchDir(space.knowledgePath, args.query))
+    }
   }
 
   results.sort((a, b) => b.score - a.score)

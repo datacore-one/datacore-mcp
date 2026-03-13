@@ -34,13 +34,14 @@ interface RecallResult {
 
 export async function handleRecall(
   args: RecallArgs,
-  storage: { engramsPath: string; journalPath: string; knowledgePath: string },
+  storage: { engramsPath: string; journalPath: string; knowledgePath: string; spaces?: Array<{ name: string; journalPath: string; knowledgePath: string }> },
   bridge?: DatacortexBridge | null,
 ): Promise<RecallResult> {
   const sources = args.sources ?? ['engrams', 'journal', 'knowledge']
   const limit = args.limit ?? 10
   const result: RecallResult = {}
   let fallbackWarning: string | undefined
+  const searchPaths = { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }
 
   // Search engrams by keyword overlap
   if (sources.includes('engrams')) {
@@ -71,7 +72,7 @@ export async function handleRecall(
   if (sources.includes('journal')) {
     const searchResult = await handleSearch(
       { query: args.topic, scope: 'journal', limit },
-      { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath },
+      searchPaths,
       bridge,
     )
     if (searchResult.results.length > 0) {
@@ -92,7 +93,7 @@ export async function handleRecall(
   if (sources.includes('knowledge')) {
     const searchResult = await handleSearch(
       { query: args.topic, scope: 'knowledge', limit },
-      { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath },
+      searchPaths,
       bridge,
     )
     if (searchResult.results.length > 0) {
