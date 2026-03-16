@@ -13,6 +13,7 @@ import type { Engram } from '../schemas/engram.js'
 import type { StorageConfig } from '../storage.js'
 import type { EngagementService } from '../engagement/index.js'
 import type { SessionTracker } from '../session-tracker.js'
+import { benchLogger } from '../server.js'
 
 interface SessionEndArgs {
   summary: string
@@ -81,6 +82,10 @@ export async function handleSessionEnd(
         display: profile ? formatSessionEnd(profile, sessionSummary.total_xp, sessionSummary.events) : '',
       }
     } catch { /* engagement never breaks core tools */ }
+  }
+
+  if (benchLogger) {
+    benchLogger.endSession()
   }
 
   return {

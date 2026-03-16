@@ -25,6 +25,7 @@ import type { StorageConfig } from '../storage.js'
 import type { DatacortexBridge } from '../datacortex.js'
 import type { EngagementService } from '../engagement/index.js'
 import type { SessionTracker } from '../session-tracker.js'
+import { benchLogger } from '../server.js'
 
 interface SessionStartArgs {
   task?: string
@@ -70,6 +71,12 @@ export async function handleSessionStart(
     // Track co-injected engrams for Hebbian write-back at session.end
     if (tracker && injectResult.injected_personal_ids.length > 0) {
       tracker.trackInjected(session_id, injectResult.injected_personal_ids)
+    }
+    if (benchLogger) {
+      benchLogger.startSession(session_id)
+      if (injectResult.injected_personal_ids?.length) {
+        benchLogger.trackEngramsInjected(injectResult.injected_personal_ids)
+      }
     }
   }
 
