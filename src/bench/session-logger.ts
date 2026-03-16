@@ -43,8 +43,8 @@ export class SessionLogger {
       tool,
       timestamp: new Date().toISOString(),
       duration_ms: durationMs,
-      input_size: JSON.stringify(args ?? {}).length,
-      output_size: JSON.stringify(result ?? {}).length,
+      input_size: Math.ceil(JSON.stringify(args ?? {}).length / 4),  // estimated tokens (chars/4)
+      output_size: Math.ceil(JSON.stringify(result ?? {}).length / 4),  // estimated tokens (chars/4)
       success
     }
     if (error) entry.error = error

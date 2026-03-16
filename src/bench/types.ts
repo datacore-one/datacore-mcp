@@ -4,8 +4,8 @@ export interface ToolCallLog {
   tool: string
   timestamp: string
   duration_ms: number
-  input_size: number   // JSON.stringify(args).length as token proxy
-  output_size: number  // JSON.stringify(result).length as token proxy
+  input_size: number   // estimated tokens (chars/4 approximation)
+  output_size: number  // estimated tokens (chars/4 approximation)
   success: boolean
   error?: string
 }
