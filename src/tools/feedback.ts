@@ -6,6 +6,7 @@ import { loadEngrams, loadAllPacks, type LoadedPack } from '../engrams.js'
 import { atomicWriteYaml } from './inject-tool.js'
 import { buildHints } from '../hints.js'
 import type { EngagementService } from '../engagement/index.js'
+import { benchLogger } from '../server.js'
 
 type Signal = 'positive' | 'negative' | 'neutral'
 
@@ -123,6 +124,10 @@ async function handleSingleFeedback(
     try { await service.award('feedback_given', { signal }) } catch { /* never break core */ }
   }
 
+  if (benchLogger) {
+    benchLogger.trackFeedback(engram_id, signal)
+  }
+
   return {
     mode: 'single',
     success: true,
@@ -206,6 +211,12 @@ async function handleBatchFeedback(
         await service.award('feedback_given', { batch: true })
       }
     } catch { /* never break core */ }
+  }
+
+  if (benchLogger) {
+    for (const item of signals) {
+      benchLogger.trackFeedback(item.engram_id, item.signal)
+    }
   }
 
   return {

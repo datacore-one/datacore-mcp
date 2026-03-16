@@ -4,6 +4,7 @@ import { getConfig } from '../config.js'
 import { buildHints } from '../hints.js'
 import type { Engram } from '../schemas/engram.js'
 import type { EngagementService } from '../engagement/index.js'
+import { benchLogger } from '../server.js'
 
 interface LearnArgs {
   statement: string
@@ -106,6 +107,10 @@ export async function handleLearn(args: LearnArgs, engramsPath: string, service?
 
   engrams.push(engram)
   saveEngrams(engramsPath, engrams)
+
+  if (benchLogger) {
+    benchLogger.trackEngramCreated(engram.id)
+  }
 
   // Engagement XP
   let xp: LearnResult['xp'] = undefined
