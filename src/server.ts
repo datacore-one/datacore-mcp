@@ -45,6 +45,7 @@ import { DatacortexBridge } from './datacortex.js'
 import { EngagementService } from './engagement/index.js'
 import { getConfig } from './config.js'
 import { SessionTracker } from './session-tracker.js'
+import { SessionLogger } from './bench/session-logger.js'
 
 let storage: StorageConfig
 let updateAvailable: string | null = null
@@ -55,6 +56,7 @@ let serverRef: Server | null = null
 let datacortexBridge: DatacortexBridge | null = null
 let engagementService: EngagementService | null = null
 export const sessionTracker = new SessionTracker()
+export let benchLogger: SessionLogger | null = null
 
 function getEngagementService(): EngagementService {
   if (!engagementService || engagementService.basePath !== storage.basePath) {
@@ -74,6 +76,14 @@ export function createServer(): Server {
       instructions: SERVER_INSTRUCTIONS,
     },
   )
+
+  // Initialize bench logger for session instrumentation (DIP-0025)
+  if (storage) {
+    const benchLogDir = storage.statePath
+      ? `${storage.statePath}/bench`
+      : `${storage.basePath}/.datacore/state/bench`
+    benchLogger = new SessionLogger(benchLogDir, currentVersion)
+  }
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     // Hide modules.* tools in core mode — they require a full installation
@@ -126,6 +136,26 @@ export function createServer(): Server {
 const ENGRAM_MUTATING_TOOLS = new Set(['datacore.learn', 'datacore.forget', 'datacore.feedback', 'datacore.session.end', 'datacore.promote', 'datacore.resolve', 'datacore.schemas', 'datacore.exchange', 'datacore.knowledge.scan'])
 
 async function routeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  const callStart = Date.now()
+  let callSuccess = true
+  let callError: string | undefined
+  let callResult: unknown
+
+  try {
+    callResult = await routeToolInner(name, args)
+    return callResult
+  } catch (e) {
+    callSuccess = false
+    callError = e instanceof Error ? e.message : String(e)
+    throw e
+  } finally {
+    if (benchLogger) {
+      benchLogger.logToolCall(name, args, callResult, Date.now() - callStart, callSuccess, callError)
+    }
+  }
+}
+
+async function routeToolInner(name: string, args: Record<string, unknown>): Promise<unknown> {
   const coreTool = TOOLS.find(t => t.name === name)
   if (coreTool) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Zod validates at runtime; union type too wide for TS
