@@ -53,12 +53,28 @@ export async function handleRecall(
       if (e.status === 'retired') continue
       const text = `${e.statement} ${e.tags.join(' ')}`.toLowerCase()
       let score = 0
+
+      // Word overlap scoring
       for (const word of topicWords) {
         if (text.includes(word)) score++
       }
-      if (score > 0) {
-        scored.push({ id: e.id, statement: e.statement, score })
+      if (score === 0) continue
+
+      // Tag boosting: +2 per tag that matches a query word
+      for (const tag of e.tags) {
+        const tagLower = tag.toLowerCase()
+        for (const word of topicWords) {
+          if (tagLower.includes(word)) {
+            score += 2
+            break
+          }
+        }
       }
+
+      // Recency boost: active > fading > dormant
+      if (e.status === 'active') score += 1
+
+      scored.push({ id: e.id, statement: e.statement, score })
     }
 
     scored.sort((a, b) => b.score - a.score)

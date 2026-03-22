@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type { DatacortexBridge } from '../datacortex.js'
 import { getConfig } from '../config.js'
+import { searchFts, resolveSpaceDbPath } from '../fts.js'
 
 const CONTENT_CACHE_MAX = 500
 const contentCache = new Map<string, { mtime: number; content: string }>()
@@ -83,10 +84,38 @@ async function keywordSearch(
 ): Promise<SearchResponse> {
   const scope = args.scope ?? 'all'
   const limit = args.limit ?? 20
-  const results: SearchResultItem[] = []
 
-  // Search across all discovered spaces
+  // Try FTS5 first — check space DBs
+  const ftsResults: SearchResultItem[] = []
   const spaces = paths.spaces ?? [{ name: 'default', journalPath: paths.journalPath, knowledgePath: paths.knowledgePath }]
+
+  for (const space of spaces) {
+    // Derive space root from knowledgePath (handles both /3-knowledge and /knowledge paths)
+    const spaceRoot = space.knowledgePath.replace(/\/(3-)?knowledge$/, '')
+    const spaceDbPath = resolveSpaceDbPath(spaceRoot)
+    const results = searchFts(spaceDbPath, args.query, {
+      scope: scope === 'all' ? undefined : scope,
+      limit,
+      includeStubs: (args as any).include_stubs,
+    })
+    for (const r of results) {
+      ftsResults.push({
+        path: r.path,
+        snippet: r.snippet,
+        score: r.score,
+        title: r.title,
+      })
+    }
+  }
+
+  // If FTS returned results, use them
+  if (ftsResults.length > 0) {
+    ftsResults.sort((a, b) => b.score - a.score)
+    return { results: ftsResults.slice(0, limit), method: 'fts5' }
+  }
+
+  // Fall back to filesystem walking (original behavior)
+  const results: SearchResultItem[] = []
   for (const space of spaces) {
     if (scope === 'journal' || scope === 'all') {
       results.push(...searchDir(space.journalPath, args.query))
