@@ -3,8 +3,11 @@
 // Tracks which engrams were injected together in a session so we can
 // write Hebbian co-access associations at session.end.
 
+import { SessionBreadcrumbs } from './session-state.js'
+
 export class SessionTracker {
   private sessions = new Map<string, Set<string>>()
+  private breadcrumbs = new Map<string, SessionBreadcrumbs>()
 
   trackInjected(sessionId: string, engramIds: string[]): void {
     if (!sessionId || engramIds.length === 0) return
@@ -37,8 +40,17 @@ export class SessionTracker {
     return set ? Array.from(set) : []
   }
 
+  initBreadcrumbs(sessionId: string): void {
+    this.breadcrumbs.set(sessionId, new SessionBreadcrumbs())
+  }
+
+  getBreadcrumbs(sessionId: string): SessionBreadcrumbs | undefined {
+    return this.breadcrumbs.get(sessionId)
+  }
+
   clear(sessionId: string): void {
     this.sessions.delete(sessionId)
+    this.breadcrumbs.delete(sessionId)
   }
 
   get size(): number {

@@ -45,9 +45,16 @@ export async function handleSessionEnd(
     tracker.clear(args.session_id)
   }
 
+  // Enrich summary with session breadcrumbs
+  const breadcrumbs = tracker?.getBreadcrumbs(args.session_id ?? '')
+  const breadcrumbContext = breadcrumbs?.generateContinuationContext() ?? ''
+  const enrichedSummary = breadcrumbContext
+    ? `${args.summary}\n\n## Session Breadcrumbs\n${breadcrumbContext}`
+    : args.summary
+
   // Capture journal entry
   const captureResult = await handleCapture(
-    { type: 'journal', content: args.summary, tags: args.tags },
+    { type: 'journal', content: enrichedSummary, tags: args.tags },
     storage,
   )
 

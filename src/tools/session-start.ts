@@ -58,6 +58,7 @@ export async function handleSessionStart(
   }
 
   const session_id = crypto.randomUUID()
+  tracker?.initBreadcrumbs(session_id)
   let engrams: { text: string; count: number } | null = null
 
   if (args.task) {
