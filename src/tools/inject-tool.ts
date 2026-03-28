@@ -19,7 +19,7 @@ interface InjectArgs {
 export interface InjectResult {
   text: string
   count: number
-  tokens_used: { directives: number; consider: number }
+  tokens_used: { directives: number; consider: number; constraints: number }
   injected_personal_ids: string[]
   related_documents?: number
   _hints?: ReturnType<typeof buildHints>
@@ -42,11 +42,11 @@ export async function handleInject(
   }
 
   const result = selectAndSpread(ctx, personalEngrams, packs, schemas)
-  const totalCount = result.directives.length + result.consider.length
+  const totalCount = result.directives.length + result.constraints.length + result.consider.length
 
   if (totalCount === 0) {
     return {
-      text: '', count: 0, tokens_used: { directives: 0, consider: 0 },
+      text: '', count: 0, tokens_used: { directives: 0, consider: 0, constraints: 0 },
       injected_personal_ids: [],
       _hints: buildHints({
         next: 'No engrams matched this task. Use datacore.recall to search all sources, or datacore.learn to record new knowledge.',
@@ -59,6 +59,12 @@ export async function handleInject(
   if (result.directives.length > 0) {
     lines.push('## DIRECTIVES\n')
     for (const e of result.directives) {
+      lines.push(formatEngram(e, totalCount))
+    }
+  }
+  if (result.constraints.length > 0) {
+    lines.push('\n## CONSTRAINTS\n')
+    for (const e of result.constraints) {
       lines.push(formatEngram(e, totalCount))
     }
   }
@@ -80,10 +86,10 @@ export async function handleInject(
   updateUsageTracking(
     paths.engramsPath,
     personalEngrams,
-    [...result.directives, ...result.consider],
+    [...result.directives, ...result.constraints, ...result.consider],
   )
 
-  const injectedIds = [...result.directives, ...result.consider]
+  const injectedIds = [...result.directives, ...result.constraints, ...result.consider]
     .filter(e => !e.pack)
     .map(e => e.id)
 

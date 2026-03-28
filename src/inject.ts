@@ -4,6 +4,8 @@ import type { SchemaDefinition } from './schemas/schema-definition.js'
 import type { LoadedPack } from './engrams.js'
 import { decayedStrength, decayedCoAccessStrength } from './decay.js'
 import { getConfig } from './config.js'
+import { computeConfidence } from './confidence.js'
+import { classifyPolarity } from './polarity.js'
 
 export interface InjectionContext {
   prompt: string
@@ -20,13 +22,16 @@ export type ScoredEngram = Engram & {
 }
 
 export type AgentEngram = Omit<ScoredEngram, 'associations'>
-export type WireEngram = Omit<AgentEngram, 'keyword_match' | 'raw_score' | 'score'>
+export type WireEngram = Omit<AgentEngram, 'keyword_match' | 'raw_score' | 'score'> & {
+  confidence_score: number
+}
 
 export interface InjectionResult {
   directives: WireEngram[]
+  constraints: WireEngram[]
   consider: WireEngram[]
   related_documents: KnowledgeAnchor[]
-  tokens_used: { directives: number; consider: number }
+  tokens_used: { directives: number; consider: number; constraints: number }
 }
 
 const DEFAULT_MAX_TOKENS = 8000
@@ -124,9 +129,9 @@ function stripAssociations(engram: ScoredEngram): AgentEngram {
   return rest
 }
 
-function stripScoring(engram: AgentEngram): WireEngram {
+function toWire(engram: AgentEngram): WireEngram {
   const { keyword_match: _, raw_score: _r, score: _s, ...rest } = engram
-  return rest
+  return { ...rest, confidence_score: computeConfidence(rest) }
 }
 
 // --- Anchor aggregation ---
@@ -368,9 +373,10 @@ export function selectAndSpread(
   if (directives.length === 0 && dip19Pool.length === 0) {
     return {
       directives: [],
+      constraints: [],
       consider: [],
       related_documents: [],
-      tokens_used: { directives: 0, consider: 0 },
+      tokens_used: { directives: 0, consider: 0, constraints: 0 },
     }
   }
 
@@ -426,22 +432,39 @@ export function selectAndSpread(
   // Merge consider pools: DIP-0019 bottom-1/3 + spreading activation
   const allConsider = [...dip19Pool, ...spreadCandidates]
 
+  // Auto-classify polarity for untagged engrams
+  for (const engram of directives) {
+    if ((engram as any).polarity == null) {
+      (engram as any).polarity = classifyPolarity(engram.statement)
+    }
+  }
+
+  // Split: dont-patterns → constraints, everything else → directives
+  const directiveEngrams = directives.filter(e => (e as any).polarity !== 'dont')
+  const constraintEngrams = directives.filter(e => (e as any).polarity === 'dont')
+
   // Steps 14-15: Strip pipeline
-  const agentDirectives = directives.map(stripAssociations)
+  const agentDirectiveEngrams = directiveEngrams.map(stripAssociations)
+  const agentConstraintEngrams = constraintEngrams.map(stripAssociations)
   const agentConsider = allConsider.map(stripAssociations)
 
-  const relatedDocs = aggregateAnchors(agentDirectives, agentConsider)
+  const relatedDocs = aggregateAnchors([...agentDirectiveEngrams, ...agentConstraintEngrams], agentConsider)
 
-  const wireDirectives = agentDirectives.map(stripScoring)
-  const wireConsider = agentConsider.map(stripScoring)
+  const wireDirectives = agentDirectiveEngrams.map(toWire)
+  const wireConstraints = agentConstraintEngrams.map(toWire)
+  const wireConsider = agentConsider.map(toWire)
 
   const considerTokens = dip19PoolTokens + spreadTokens
+  const constraintTokens = wireConstraints.reduce(
+    (acc, e) => acc + Math.ceil(JSON.stringify(e).length / 4), 0,
+  )
 
   return {
     directives: wireDirectives,
+    constraints: wireConstraints,
     consider: wireConsider,
     related_documents: relatedDocs,
-    tokens_used: { directives: directiveTokens, consider: considerTokens },
+    tokens_used: { directives: directiveTokens - constraintTokens, consider: considerTokens, constraints: constraintTokens },
   }
 }
 

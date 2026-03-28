@@ -187,3 +187,85 @@ describe('selectAndSpread', () => {
     expect(result.directives.length + result.consider.length).toBe(1)
   })
 })
+
+describe('injection backward compatibility', () => {
+  it('returns empty constraints array when no dont-patterns exist', () => {
+    const ctx: InjectionContext = { prompt: 'data handling design' }
+    const engrams = [makeEngram({
+      id: 'ENG-BC-001', statement: 'Use structured logging for all services',
+      tags: ['data'],
+    })]
+    const result = selectAndSpread(ctx, engrams, [])
+    expect(result.constraints).toEqual([])
+    expect(result.directives).toHaveLength(1)
+    expect(result.directives[0].statement).toBe('Use structured logging for all services')
+  })
+
+  it('includes confidence_score as number on all WireEngrams', () => {
+    const ctx: InjectionContext = { prompt: 'data handling design' }
+    const engrams = [makeEngram({
+      id: 'ENG-BC-002', statement: 'Always validate data inputs',
+      tags: ['data'],
+      feedback_signals: { positive: 5, negative: 1, neutral: 2 },
+    })]
+    const result = selectAndSpread(ctx, engrams, [])
+    expect(result.directives).toHaveLength(1)
+    const wire = result.directives[0]
+    expect(wire).toHaveProperty('confidence_score')
+    expect(typeof wire.confidence_score).toBe('number')
+    expect(wire.confidence_score).toBeGreaterThanOrEqual(0)
+    expect(wire.confidence_score).toBeLessThanOrEqual(1)
+  })
+
+  it('includes constraints in tokens_used', () => {
+    const ctx: InjectionContext = { prompt: 'data handling design' }
+    const engrams = [
+      makeEngram({ id: 'ENG-BC-003', statement: 'Use data validation', tags: ['data'] }),
+      makeEngram({ id: 'ENG-BC-004', statement: 'Never expose raw data to clients', tags: ['data'] }),
+    ]
+    const result = selectAndSpread(ctx, engrams, [])
+    expect(result.tokens_used).toHaveProperty('constraints')
+    expect(typeof result.tokens_used.constraints).toBe('number')
+  })
+})
+
+describe('injection polarity split', () => {
+  it('separates dont-pattern engrams into constraints', () => {
+    const ctx: InjectionContext = { prompt: 'data handling design' }
+    const engrams = [
+      makeEngram({ id: 'ENG-PS-001', statement: 'Use structured logging', tags: ['data'] }),
+      makeEngram({ id: 'ENG-PS-002', statement: 'Never store plaintext passwords in data', tags: ['data'] }),
+    ]
+    const result = selectAndSpread(ctx, engrams, [])
+    expect(result.directives.map(e => e.id)).toContain('ENG-PS-001')
+    expect(result.constraints.map(e => e.id)).toContain('ENG-PS-002')
+    // Should not be in the other bucket
+    expect(result.directives.map(e => e.id)).not.toContain('ENG-PS-002')
+    expect(result.constraints.map(e => e.id)).not.toContain('ENG-PS-001')
+  })
+
+  it('auto-classifies dont when polarity field is null', () => {
+    const ctx: InjectionContext = { prompt: 'data handling design' }
+    // No polarity field set (defaults to null in makeEngram)
+    const engrams = [makeEngram({
+      id: 'ENG-PS-003', statement: 'Never commit secrets to data repositories',
+      tags: ['data'],
+    })]
+    const result = selectAndSpread(ctx, engrams, [])
+    expect(result.constraints).toHaveLength(1)
+    expect(result.constraints[0].id).toBe('ENG-PS-003')
+    expect(result.directives).toHaveLength(0)
+  })
+
+  it('respects existing polarity=dont on engram', () => {
+    const ctx: InjectionContext = { prompt: 'data handling design' }
+    const engrams = [makeEngram({
+      id: 'ENG-PS-004', statement: 'Check data before processing',
+      tags: ['data'],
+      polarity: 'dont' as any,
+    })]
+    const result = selectAndSpread(ctx, engrams, [])
+    expect(result.constraints).toHaveLength(1)
+    expect(result.constraints[0].id).toBe('ENG-PS-004')
+  })
+})
