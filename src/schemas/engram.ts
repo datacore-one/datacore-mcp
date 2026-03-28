@@ -81,6 +81,7 @@ export const EngramSchema = z.object({
   associations: z.array(AssociationSchema).default([]),
   dual_coding: DualCodingSchema.optional(),
   tags: z.array(z.string()).default([]),
+  polarity: z.enum(['do', 'dont']).nullable().default(null),
   pack: z.string().nullable().default(null),
   abstract: z.string().nullable().default(null),
   derived_from: z.string().nullable().default(null),

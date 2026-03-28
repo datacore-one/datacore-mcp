@@ -94,6 +94,7 @@ export async function handleLearn(args: LearnArgs, engramsPath: string, service?
     associations: [],
     dual_coding: args.dual_coding?.example || args.dual_coding?.analogy ? args.dual_coding : undefined,
     tags: args.tags ?? [],
+    polarity: null,
     activation: {
       retrieval_strength: autoPromote ? 0.7 : 0.5,
       storage_strength: autoPromote ? 1.0 : 0.3,
