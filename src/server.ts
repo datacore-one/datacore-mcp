@@ -16,7 +16,6 @@ import { handleInject } from './tools/inject-tool.js'
 import { handleSearch } from './tools/search.js'
 import { handleIngest } from './tools/ingest.js'
 import { handleStatus } from './tools/status.js'
-import { handleDiscover } from './tools/discover.js'
 import { handleInstall } from './tools/install.js'
 import { handleExport } from './tools/export.js'
 import {
@@ -34,17 +33,11 @@ import { handleSessionStart } from './tools/session-start.js'
 import { handleSessionEnd } from './tools/session-end.js'
 import { handleRecall } from './tools/recall.js'
 import { handlePromote } from './tools/promote.js'
-import { handleResolve } from './tools/resolve.js'
-import { handleSchemas } from './tools/schemas.js'
-import { handleExchange } from './tools/exchange.js'
 import { handleKnowledgeScan } from './tools/knowledge-scan.js'
 import { logger } from './logger.js'
 import { registerResources, notifyEngramsChanged } from './resources.js'
 import { registerPrompts } from './prompts.js'
 import { DatacortexBridge } from './datacortex.js'
-import { EngagementService } from './engagement/index.js'
-import { getConfig } from './config.js'
-import { SessionTracker } from './session-tracker.js'
 import { SessionLogger } from './bench/session-logger.js'
 
 let storage: StorageConfig
@@ -54,17 +47,7 @@ let discoveredModules: DiscoveredModule[] = []
 let isFirstRun = false
 let serverRef: Server | null = null
 let datacortexBridge: DatacortexBridge | null = null
-let engagementService: EngagementService | null = null
-export const sessionTracker = new SessionTracker()
 export let benchLogger: SessionLogger | null = null
-
-function getEngagementService(): EngagementService {
-  if (!engagementService || engagementService.basePath !== storage.basePath) {
-    const config = getConfig()
-    engagementService = new EngagementService(storage.basePath, config.engagement)
-  }
-  return engagementService
-}
 
 // --- Server creation ---
 
@@ -133,7 +116,7 @@ export function createServer(): Server {
 
 // --- Tool routing ---
 
-const ENGRAM_MUTATING_TOOLS = new Set(['datacore.learn', 'datacore.forget', 'datacore.feedback', 'datacore.session.end', 'datacore.promote', 'datacore.resolve', 'datacore.schemas', 'datacore.exchange', 'datacore.knowledge.scan'])
+const ENGRAM_MUTATING_TOOLS = new Set(['datacore.learn', 'datacore.forget', 'datacore.feedback', 'datacore.session.end', 'datacore.promote', 'datacore.knowledge.scan'])
 
 async function routeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   const callStart = Date.now()
@@ -163,24 +146,21 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
     let result: unknown
     switch (name) {
       case 'datacore.capture': result = await handleCapture(validated, storage); break
-      case 'datacore.learn': result = await handleLearn(validated, storage.engramsPath, getEngagementService()); break
-      case 'datacore.inject': result = await handleInject(validated, { engramsPath: storage.engramsPath, packsPath: storage.packsPath, basePath: storage.basePath, schemasPath: storage.schemasPath }); break
+      case 'datacore.learn': result = await handleLearn(validated); break
+      case 'datacore.inject': result = await handleInject(validated); break
       case 'datacore.search': result = await handleSearch(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }, datacortexBridge); break
       case 'datacore.ingest': result = await handleIngest(validated, { knowledgePath: storage.knowledgePath, engramsPath: storage.engramsPath }); break
-      case 'datacore.status': result = await handleStatus({ ...storage, engramsPath: storage.engramsPath, packsPath: storage.packsPath }, updateAvailable, getEngagementService()); break
-      case 'datacore.forget': result = await handleForget(validated, storage.engramsPath, getEngagementService()); break
-      case 'datacore.feedback': result = await handleFeedback(validated, storage.engramsPath, storage.packsPath, getEngagementService()); break
-      case 'datacore.session.start': result = await handleSessionStart(validated, storage, datacortexBridge, getEngagementService(), sessionTracker); break
-      case 'datacore.session.end': result = await handleSessionEnd(validated, storage, getEngagementService(), sessionTracker); break
-      case 'datacore.recall': result = await handleRecall(validated, { engramsPath: storage.engramsPath, journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }, datacortexBridge); break
-      case 'datacore.promote': result = await handlePromote(validated, storage.engramsPath, getEngagementService()); break
+      case 'datacore.status': result = await handleStatus({ ...storage, engramsPath: storage.engramsPath, packsPath: storage.packsPath }, updateAvailable); break
+      case 'datacore.forget': result = await handleForget(validated); break
+      case 'datacore.feedback': result = await handleFeedback(validated); break
+      case 'datacore.session.start': result = await handleSessionStart(validated, storage); break
+      case 'datacore.session.end': result = await handleSessionEnd(validated, storage); break
+      case 'datacore.recall': result = await handleRecall(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }, datacortexBridge); break
+      case 'datacore.promote': result = await handlePromote(validated); break
       case 'datacore.packs.discover': result = handleDiscover(validated, storage.packsPath); break
       case 'datacore.packs.install': result = await handleInstall(validated, storage.packsPath); break
-      case 'datacore.packs.export': result = await handleExport(validated as any, { engramsPath: storage.engramsPath, packsPath: storage.packsPath }, getEngagementService()); break
+      case 'datacore.packs.export': result = await handleExport(validated as any, { engramsPath: storage.engramsPath, packsPath: storage.packsPath }); break
       case 'datacore.knowledge.scan': result = await handleKnowledgeScan(validated as any, { knowledgePath: storage.knowledgePath, knowledgeSurfacingPath: storage.knowledgeSurfacingPath, engramsPath: storage.engramsPath }); break
-      case 'datacore.exchange': result = await handleExchange(validated as any, { engramsPath: storage.engramsPath, exchangeInboxPath: storage.exchangeInboxPath, exchangeOutboxPath: storage.exchangeOutboxPath }, getEngagementService()); break
-      case 'datacore.schemas': result = await handleSchemas(validated as any, { schemasPath: storage.schemasPath, engramsPath: storage.engramsPath }); break
-      case 'datacore.resolve': result = await handleResolve(validated as any, storage.engramsPath, getEngagementService()); break
       case 'datacore.modules.list': result = await handleModulesList(validated, storage, discoveredModules); break
       case 'datacore.modules.info': result = await handleModulesInfo(validated as { module: string }, storage, discoveredModules); break
       case 'datacore.modules.health': result = await handleModulesHealth(validated as { module?: string }, storage, discoveredModules); break
@@ -188,14 +168,6 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
     }
     if (ENGRAM_MUTATING_TOOLS.has(name) && serverRef) {
       notifyEngramsChanged(serverRef)
-    }
-    // Track co-injected engrams for direct inject calls (not via session.start)
-    if (name === 'datacore.inject' && result && typeof result === 'object') {
-      const injectResult = result as { injected_personal_ids?: string[] }
-      const sessionId = (validated as { session_id?: string }).session_id
-      if (sessionId && injectResult.injected_personal_ids?.length) {
-        sessionTracker.trackInjected(sessionId, injectResult.injected_personal_ids)
-      }
     }
     return result
   }

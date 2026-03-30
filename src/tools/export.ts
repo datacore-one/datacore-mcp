@@ -1,10 +1,6 @@
 // src/tools/export.ts
-import * as fs from 'fs'
-import * as path from 'path'
-import * as yaml from 'js-yaml'
-import { loadEngrams } from '../engrams.js'
-import type { Engram } from '../schemas/engram.js'
-import type { EngagementService } from '../engagement/index.js'
+import { getPlur } from '../plur-bridge.js'
+import type { Engram } from '@plur-ai/core'
 
 interface ExportArgs {
   name: string
@@ -29,13 +25,10 @@ interface ExportResult {
 export async function handleExport(
   args: ExportArgs,
   paths: { engramsPath: string; packsPath: string },
-  service?: EngagementService,
 ): Promise<ExportResult> {
-  const allEngrams = loadEngrams(paths.engramsPath)
-  let selected = allEngrams.filter(e => e.status === 'active')
-
-  // Only include public or template engrams
-  selected = selected.filter(e => e.visibility === 'public' || e.visibility === 'template')
+  const plur = getPlur()
+  const allEngrams = plur.list()
+  let selected = allEngrams.filter(e => e.visibility === 'public' || e.visibility === 'template')
 
   if (selected.length === 0 && !args.engram_ids?.length) {
     return { success: false, error: 'No exportable engrams found (only public/template engrams can be exported)' }
@@ -47,7 +40,6 @@ export async function handleExport(
     // For explicit IDs, still filter for public/template from allEngrams
     selected = allEngrams.filter(e =>
       idSet.has(e.id) &&
-      e.status === 'active' &&
       (e.visibility === 'public' || e.visibility === 'template')
     )
     const privateSkipped = args.engram_ids.filter(id => {
@@ -73,10 +65,10 @@ export async function handleExport(
   }
 
   const packId = args.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50)
-  const packDir = path.join(paths.packsPath, packId)
 
   // Preview mode (default)
   if (!args.confirm) {
+    const packDir = `${paths.packsPath}/${packId}`
     return {
       success: true,
       preview: {
@@ -87,71 +79,12 @@ export async function handleExport(
     }
   }
 
-  // Check for existing pack
-  if (fs.existsSync(packDir)) {
-    return {
-      success: false,
-      error: `Pack directory already exists at ${packDir}. Remove it first or use a different name.`,
-    }
-  }
+  // Export via PLUR
+  const result = plur.exportPack(selected, paths.packsPath, {
+    name: args.name,
+    version: '1.0.0',
+    description: args.description,
+  })
 
-  // Write pack
-  fs.mkdirSync(packDir, { recursive: true })
-
-  // SKILL.md with frontmatter
-  const skillContent = `---
-name: "${args.name}"
-description: "${args.description}"
-version: "1.0.0"
-schema_version: 2
-x-datacore:
-  id: "${packId}"
-  injection_policy: on_match
-  match_terms: []
-  engram_count: ${selected.length}
----
-
-# ${args.name}
-
-${args.description}
-
-Exported ${selected.length} engrams.
-`
-  fs.writeFileSync(path.join(packDir, 'SKILL.md'), skillContent)
-
-  // engrams.yaml — strip personal fields, preserve knowledge content
-  const exportEngrams = selected.map(e => ({
-    id: e.id,
-    version: e.version,
-    type: e.type,
-    scope: e.scope,
-    visibility: e.visibility,
-    statement: e.statement,
-    rationale: e.rationale,
-    contraindications: e.contraindications,
-    tags: e.tags,
-    domain: e.domain,
-    status: 'active',
-    activation: {
-      retrieval_strength: 0.7,
-      storage_strength: 1.0,
-      frequency: 0,
-      last_accessed: new Date().toISOString().split('T')[0],
-    },
-    feedback_signals: { positive: 0, negative: 0 },
-  }))
-
-  fs.writeFileSync(
-    path.join(packDir, 'engrams.yaml'),
-    yaml.dump({ engrams: exportEngrams }, { lineWidth: 120, noRefs: true, quotingType: '"' }),
-  )
-
-  // Engagement XP (quality gate: 5+ engrams)
-  if (service?.isEnabled() && selected.length >= 5) {
-    try {
-      await service.award('pack_exported', { engram_count: selected.length, avg_fitness: 0.7 })
-    } catch { /* never break core */ }
-  }
-
-  return { success: true, pack_path: packDir }
+  return { success: true, pack_path: result.path }
 }

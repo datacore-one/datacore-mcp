@@ -1,5 +1,5 @@
 // src/tools/recall.ts
-import { loadEngrams } from '../engrams.js'
+import { getPlur } from '../plur-bridge.js'
 import { handleSearch } from './search.js'
 import { buildHints } from '../hints.js'
 import type { DatacortexBridge } from '../datacortex.js'
@@ -10,130 +10,62 @@ interface RecallArgs {
   limit?: number
 }
 
-interface EngramResult {
-  id: string
-  statement: string
-  score: number
-}
-
-interface FileResult {
-  path: string
-  snippet: string
-  title?: string
-  date?: string
-  score: number
-}
-
 interface RecallResult {
-  engrams?: EngramResult[]
-  journal?: FileResult[]
-  knowledge?: FileResult[]
+  engrams?: Array<{ id: string; statement: string; score: number }>
+  journal?: Array<{ path: string; snippet: string; score: number }>
+  knowledge?: Array<{ path: string; snippet: string; score: number }>
   fallback_warning?: string
   _hints?: ReturnType<typeof buildHints>
 }
 
 export async function handleRecall(
   args: RecallArgs,
-  storage: { engramsPath: string; journalPath: string; knowledgePath: string; spaces?: Array<{ name: string; journalPath: string; knowledgePath: string }> },
+  storage: { journalPath: string; knowledgePath: string; spaces?: Array<{ name: string; journalPath: string; knowledgePath: string }> },
   bridge?: DatacortexBridge | null,
 ): Promise<RecallResult> {
   const sources = args.sources ?? ['engrams', 'journal', 'knowledge']
   const limit = args.limit ?? 10
   const result: RecallResult = {}
   let fallbackWarning: string | undefined
-  const searchPaths = { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }
 
-  // Search engrams by keyword overlap
+  // Search engrams via PLUR hybrid search
   if (sources.includes('engrams')) {
-    const engrams = loadEngrams(storage.engramsPath)
-    const topicWords = args.topic.toLowerCase().split(/\s+/).filter(w => w.length > 2)
-    const scored: EngramResult[] = []
-
-    for (const e of engrams) {
-      if (e.status === 'retired') continue
-      const text = `${e.statement} ${e.tags.join(' ')}`.toLowerCase()
-      let score = 0
-
-      // Word overlap scoring
-      for (const word of topicWords) {
-        if (text.includes(word)) score++
-      }
-      if (score === 0) continue
-
-      // Tag boosting: +2 per tag that matches a query word
-      for (const tag of e.tags) {
-        const tagLower = tag.toLowerCase()
-        for (const word of topicWords) {
-          if (tagLower.includes(word)) {
-            score += 2
-            break
-          }
-        }
-      }
-
-      // Recency boost: active > fading > dormant
-      if (e.status === 'active') score += 1
-
-      scored.push({ id: e.id, statement: e.statement, score })
+    const plur = getPlur()
+    let engrams: import('@plur-ai/core').Engram[]
+    try {
+      engrams = await plur.recallHybrid(args.topic, { limit })
+    } catch {
+      engrams = plur.recall(args.topic, { limit })
     }
-
-    scored.sort((a, b) => b.score - a.score)
-    const engramResults = scored.slice(0, limit)
-    if (engramResults.length > 0) {
-      result.engrams = engramResults
+    if (engrams.length > 0) {
+      result.engrams = engrams.map((e, i) => ({
+        id: e.id, statement: e.statement, score: engrams.length - i,
+      }))
     }
   }
 
-  // Search journal
+  // Journal + knowledge search stays in Datacore (unchanged)
   if (sources.includes('journal')) {
-    const searchResult = await handleSearch(
-      { query: args.topic, scope: 'journal', limit },
-      searchPaths,
-      bridge,
-    )
+    const searchResult = await handleSearch({ query: args.topic, scope: 'journal', limit }, storage, bridge)
     if (searchResult.results.length > 0) {
-      result.journal = searchResult.results.map(r => ({
-        path: r.path,
-        snippet: r.snippet,
-        title: (r as any).title,
-        date: (r as any).date,
-        score: r.score,
-      }))
+      result.journal = searchResult.results.map(r => ({ path: r.path, snippet: r.snippet, score: r.score }))
     }
-    if (searchResult.fallback_warning) {
-      fallbackWarning = searchResult.fallback_warning
-    }
+    if (searchResult.fallback_warning) fallbackWarning = searchResult.fallback_warning
   }
 
-  // Search knowledge
   if (sources.includes('knowledge')) {
-    const searchResult = await handleSearch(
-      { query: args.topic, scope: 'knowledge', limit },
-      searchPaths,
-      bridge,
-    )
+    const searchResult = await handleSearch({ query: args.topic, scope: 'knowledge', limit }, storage, bridge)
     if (searchResult.results.length > 0) {
-      result.knowledge = searchResult.results.map(r => ({
-        path: r.path,
-        snippet: r.snippet,
-        title: (r as any).title,
-        date: (r as any).date,
-        score: r.score,
-      }))
+      result.knowledge = searchResult.results.map(r => ({ path: r.path, snippet: r.snippet, score: r.score }))
     }
-    if (searchResult.fallback_warning) {
-      fallbackWarning = searchResult.fallback_warning
-    }
+    if (searchResult.fallback_warning) fallbackWarning = searchResult.fallback_warning
   }
 
-  if (fallbackWarning) {
-    result.fallback_warning = fallbackWarning
-  }
+  if (fallbackWarning) result.fallback_warning = fallbackWarning
 
   result._hints = buildHints({
     next: 'Use datacore.feedback on helpful engrams, or datacore.learn to create new ones.',
     related: ['datacore.feedback', 'datacore.learn'],
   })
-
   return result
 }

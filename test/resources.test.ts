@@ -1,23 +1,28 @@
 // test/resources.test.ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { Plur } from '@plur-ai/core'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { registerResources } from '../src/resources.js'
+import { resetPlur } from '../src/plur-bridge.js'
 import type { StorageConfig } from '../src/storage.js'
 
 describe('MCP Resources', () => {
-  const tmpDir = path.join(os.tmpdir(), 'resources-test-' + Date.now())
+  let tmpDir: string
   let storage: StorageConfig
   let server: Server
   let handlers: Map<string, Function>
 
   beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'resources-test-'))
     fs.mkdirSync(path.join(tmpDir, 'journal'), { recursive: true })
     fs.mkdirSync(path.join(tmpDir, 'knowledge'), { recursive: true })
     fs.mkdirSync(path.join(tmpDir, 'packs'), { recursive: true })
-    fs.writeFileSync(path.join(tmpDir, 'engrams.yaml'), 'engrams:\n  - id: ENG-2026-0101-001\n    version: 1\n    statement: Test engram\n    type: behavioral\n    scope: global\n    tags: [test]\n    domain: testing\n    status: active\n    visibility: private\n    activation:\n      retrieval_strength: 0.8\n      storage_strength: 1.0\n      frequency: 1\n      last_accessed: "2026-01-01"\n    source_patterns: []\n    feedback_signals:\n      positive: 0\n      negative: 0\n')
+
+    process.env.PLUR_PATH = tmpDir
+    resetPlur()
 
     storage = {
       mode: 'core',
@@ -38,7 +43,11 @@ describe('MCP Resources', () => {
     registerResources(server, storage)
   })
 
-  afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }))
+  afterEach(() => {
+    delete process.env.PLUR_PATH
+    resetPlur()
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
 
   it('registers list resources handler', () => {
     expect(handlers.size).toBeGreaterThanOrEqual(2)
@@ -61,6 +70,9 @@ describe('MCP Resources', () => {
   })
 
   it('reads status resource', async () => {
+    const plur = new Plur({ path: tmpDir })
+    plur.learn('Test engram')
+
     const readHandler = [...handlers.values()][2]
     const result = await readHandler({ params: { uri: 'datacore://status' } })
     const data = JSON.parse(result.contents[0].text)
@@ -69,11 +81,13 @@ describe('MCP Resources', () => {
   })
 
   it('reads active engrams resource', async () => {
+    const plur = new Plur({ path: tmpDir })
+    plur.learn('Test engram')
+
     const readHandler = [...handlers.values()][2]
     const result = await readHandler({ params: { uri: 'datacore://engrams/active' } })
     const engrams = JSON.parse(result.contents[0].text)
     expect(engrams).toHaveLength(1)
-    expect(engrams[0].id).toBe('ENG-2026-0101-001')
   })
 
   it('reads agent guide resource', async () => {

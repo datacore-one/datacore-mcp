@@ -1,12 +1,6 @@
 // src/tools/inject-tool.ts
-import * as fs from 'fs'
-import * as path from 'path'
-import * as yaml from 'js-yaml'
-import { loadEngrams, loadAllPacks } from '../engrams.js'
-import { selectAndSpread, type InjectionContext, type WireEngram } from '../inject.js'
-import { loadSchemas } from '../schemas/schema-definition.js'
+import { getPlur } from '../plur-bridge.js'
 import { buildHints } from '../hints.js'
-import type { Engram, KnowledgeAnchor } from '../schemas/engram.js'
 
 interface InjectArgs {
   prompt: string
@@ -19,154 +13,50 @@ interface InjectArgs {
 export interface InjectResult {
   text: string
   count: number
-  tokens_used: { directives: number; consider: number; constraints: number }
+  tokens_used: number
   injected_personal_ids: string[]
-  related_documents?: number
   _hints?: ReturnType<typeof buildHints>
 }
 
-export async function handleInject(
-  args: InjectArgs,
-  paths: { engramsPath: string; packsPath: string; basePath?: string; schemasPath?: string },
-): Promise<InjectResult> {
-  const personalEngrams = loadEngrams(paths.engramsPath)
-  const packs = loadAllPacks(paths.packsPath)
-  const schemas = paths.schemasPath ? loadSchemas(paths.schemasPath) : []
+export async function handleInject(args: InjectArgs): Promise<InjectResult> {
+  const plur = getPlur()
 
-  const ctx: InjectionContext = {
-    prompt: args.prompt,
-    scope: args.scope,
-    session_id: args.session_id,
-    maxTokens: args.max_tokens,
-    minRelevance: args.min_relevance,
+  let result: import('@plur-ai/core').InjectionResult
+  try {
+    result = await plur.injectHybrid(args.prompt, {
+      scope: args.scope,
+      budget: args.max_tokens,
+    })
+  } catch {
+    result = plur.inject(args.prompt, {
+      scope: args.scope,
+      budget: args.max_tokens,
+    })
   }
 
-  const result = selectAndSpread(ctx, personalEngrams, packs, schemas)
-  const totalCount = result.directives.length + result.constraints.length + result.consider.length
-
-  if (totalCount === 0) {
+  if (result.count === 0) {
     return {
-      text: '', count: 0, tokens_used: { directives: 0, consider: 0, constraints: 0 },
-      injected_personal_ids: [],
+      text: '', count: 0, tokens_used: 0, injected_personal_ids: [],
       _hints: buildHints({
-        next: 'No engrams matched this task. Use datacore.recall to search all sources, or datacore.learn to record new knowledge.',
+        next: 'No engrams matched. Use datacore.recall to search, or datacore.learn to record.',
         related: ['datacore.recall', 'datacore.learn'],
       }),
     }
   }
 
   const lines: string[] = []
-  if (result.directives.length > 0) {
-    lines.push('## DIRECTIVES\n')
-    for (const e of result.directives) {
-      lines.push(formatEngram(e, totalCount))
-    }
-  }
-  if (result.constraints.length > 0) {
-    lines.push('\n## CONSTRAINTS\n')
-    for (const e of result.constraints) {
-      lines.push(formatEngram(e, totalCount))
-    }
-  }
-  if (result.consider.length > 0) {
-    lines.push('\n## ALSO CONSIDER\n')
-    for (const e of result.consider) {
-      lines.push(formatEngram(e, totalCount))
-    }
-  }
-  // Filter related_documents to only files that exist on this system
-  const relatedDocs = paths.basePath
-    ? result.related_documents.filter(doc => fs.existsSync(path.join(paths.basePath!, doc.path)))
-    : result.related_documents
-  if (relatedDocs.length > 0) {
-    lines.push('\n' + formatRelatedDocs(relatedDocs))
-  }
-
-  // Update usage tracking for selected personal engrams
-  updateUsageTracking(
-    paths.engramsPath,
-    personalEngrams,
-    [...result.directives, ...result.constraints, ...result.consider],
-  )
-
-  const injectedIds = [...result.directives, ...result.constraints, ...result.consider]
-    .filter(e => !e.pack)
-    .map(e => e.id)
-
-  const idsList = injectedIds.length > 0 ? ` Injected IDs: ${injectedIds.join(', ')}` : ''
+  if (result.directives) lines.push('## DIRECTIVES\n', result.directives)
+  if (result.constraints) lines.push('\n## CONSTRAINTS\n', result.constraints)
+  if (result.consider) lines.push('\n## ALSO CONSIDER\n', result.consider)
 
   return {
     text: lines.join('\n'),
-    count: totalCount,
+    count: result.count,
     tokens_used: result.tokens_used,
-    injected_personal_ids: injectedIds,
-    related_documents: relatedDocs.length > 0 ? relatedDocs.length : undefined,
+    injected_personal_ids: result.injected_ids,
     _hints: buildHints({
-      next: `After task, call datacore.feedback on helpful/unhelpful engrams.${idsList}`,
+      next: `After task, call datacore.feedback. IDs: ${result.injected_ids.join(', ')}`,
       related: ['datacore.feedback', 'datacore.session.end'],
     }),
   }
-}
-
-function updateUsageTracking(
-  engramsPath: string,
-  allPersonal: Engram[],
-  selected: WireEngram[],
-): void {
-  const selectedPersonalIds = new Set(
-    selected.filter(e => !e.pack).map(e => e.id),
-  )
-  if (selectedPersonalIds.size === 0) return
-
-  const today = new Date().toISOString().split('T')[0]
-  let changed = false
-
-  for (const engram of allPersonal) {
-    if (selectedPersonalIds.has(engram.id)) {
-      engram.activation.last_accessed = today
-      engram.activation.frequency += 1
-      changed = true
-    }
-  }
-
-  if (changed) {
-    atomicWriteYaml(engramsPath, { engrams: allPersonal })
-  }
-}
-
-export function atomicWriteYaml(filePath: string, data: unknown): void {
-  const content = yaml.dump(data, { lineWidth: 120, noRefs: true, quotingType: '"' })
-  const tmpPath = filePath + '.tmp.' + process.pid
-  fs.writeFileSync(tmpPath, content)
-  fs.renameSync(tmpPath, filePath)
-}
-
-function formatEngram(engram: WireEngram, totalCount: number): string {
-  if (totalCount < 10) {
-    let text = `- **${engram.statement}**`
-    if (engram.rationale) text += `\n  _${engram.rationale}_`
-    if (engram.contraindications?.length) {
-      text += `\n  Except: ${engram.contraindications.join(', ')}`
-    }
-    if (engram.dual_coding) {
-      if (engram.dual_coding.example) text += `\n  Example: ${engram.dual_coding.example}`
-      if (engram.dual_coding.analogy) text += `\n  Analogy: ${engram.dual_coding.analogy}`
-    }
-    return text
-  }
-  if (totalCount < 30) {
-    const source = engram.pack ? ` [${engram.pack}]` : ''
-    return `- ${engram.statement}${source}`
-  }
-  return `- ${engram.statement}`
-}
-
-function formatRelatedDocs(docs: KnowledgeAnchor[]): string {
-  const lines: string[] = ['## RELATED DOCUMENTS\n']
-  for (const doc of docs) {
-    let line = `- [${doc.relevance}] ${doc.path}`
-    if (doc.snippet) line += ` — "${doc.snippet}"`
-    lines.push(line)
-  }
-  return lines.join('\n')
 }

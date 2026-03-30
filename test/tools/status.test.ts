@@ -1,48 +1,48 @@
 // test/tools/status.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { Plur } from '@plur-ai/core'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import * as yaml from 'js-yaml'
 import { handleStatus } from '../../src/tools/status.js'
 import { loadConfig, resetConfigCache } from '../../src/config.js'
+import { resetPlur } from '../../src/plur-bridge.js'
 
 describe('datacore.status', () => {
-  const tmpDir = path.join(os.tmpdir(), 'status-test-' + Date.now())
-  const engramsPath = path.join(tmpDir, 'engrams.yaml')
-  const journalPath = path.join(tmpDir, 'journal')
-  const knowledgePath = path.join(tmpDir, 'knowledge')
-  const packsPath = path.join(tmpDir, 'packs')
+  let tmpDir: string
+  let journalPath: string
+  let knowledgePath: string
+  let packsPath: string
+  let engramsPath: string
 
   beforeEach(() => {
     resetConfigCache()
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'status-test-'))
+    journalPath = path.join(tmpDir, 'journal')
+    knowledgePath = path.join(tmpDir, 'knowledge')
+    packsPath = path.join(tmpDir, 'packs')
+    engramsPath = path.join(tmpDir, 'engrams.yaml')
     fs.mkdirSync(journalPath, { recursive: true })
     fs.mkdirSync(knowledgePath, { recursive: true })
     fs.mkdirSync(packsPath, { recursive: true })
-    fs.writeFileSync(engramsPath, `engrams:
-  - id: ENG-2026-0219-001
-    version: 2
-    status: active
-    type: behavioral
-    scope: global
-    visibility: private
-    statement: "Test engram"
-    activation:
-      retrieval_strength: 0.8
-      storage_strength: 0.5
-      frequency: 3
-      last_accessed: "2026-02-19"
-`)
-    fs.writeFileSync(path.join(journalPath, '2026-02-19.md'), '# Today\n')
-    fs.writeFileSync(path.join(knowledgePath, 'note.md'), '# Note\n')
+    process.env.PLUR_PATH = tmpDir
+    resetPlur()
     loadConfig(tmpDir, 'core')
   })
+
   afterEach(() => {
+    delete process.env.PLUR_PATH
+    resetPlur()
     resetConfigCache()
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
   it('returns counts for engrams, packs, journal, and knowledge', async () => {
+    const plur = new Plur({ path: tmpDir })
+    plur.learn('Test engram')
+    fs.writeFileSync(path.join(journalPath, '2026-02-19.md'), '# Today\n')
+    fs.writeFileSync(path.join(knowledgePath, 'note.md'), '# Note\n')
+
     const result = await handleStatus({
       engramsPath, journalPath, knowledgePath, packsPath,
       mode: 'core', basePath: tmpDir,
@@ -54,14 +54,10 @@ describe('datacore.status', () => {
   })
 
   it('includes scaling hint when engrams exceed 500', async () => {
-    const engrams = Array.from({ length: 501 }, (_, i) => ({
-      id: `ENG-2026-0219-${String(i).padStart(3, '0')}`,
-      version: 2, status: 'active', type: 'behavioral', scope: 'global',
-      visibility: 'private',
-      statement: `Engram ${i}`,
-      activation: { retrieval_strength: 0.5, storage_strength: 0.5, frequency: 1, last_accessed: '2026-02-19' },
-    }))
-    fs.writeFileSync(engramsPath, yaml.dump({ engrams }))
+    const plur = new Plur({ path: tmpDir })
+    for (let i = 0; i < 501; i++) {
+      plur.learn(`Engram ${i}`)
+    }
 
     const result = await handleStatus({
       engramsPath, journalPath, knowledgePath, packsPath,
@@ -75,35 +71,8 @@ describe('datacore.status', () => {
       engramsPath, journalPath, knowledgePath, packsPath,
       mode: 'core', basePath: tmpDir,
     })
-    // Unless test runs on 2026-02-19, there's no journal for today
-    const today = new Date().toLocaleDateString('en-CA')
-    if (today !== '2026-02-19') {
-      expect(result._recommendations).toBeDefined()
-      expect(result._recommendations!.some(r => r.includes('No journal entry today'))).toBe(true)
-    }
-  })
-
-  it('recommends promoting candidates', async () => {
-    fs.writeFileSync(engramsPath, `engrams:
-  - id: ENG-2026-0219-001
-    version: 2
-    status: candidate
-    type: behavioral
-    scope: global
-    visibility: private
-    statement: "Test candidate"
-    activation:
-      retrieval_strength: 0.5
-      storage_strength: 0.3
-      frequency: 0
-      last_accessed: "2026-02-19"
-`)
-    const result = await handleStatus({
-      engramsPath, journalPath, knowledgePath, packsPath,
-      mode: 'core', basePath: tmpDir,
-    })
     expect(result._recommendations).toBeDefined()
-    expect(result._recommendations!.some(r => r.includes('candidate'))).toBe(true)
+    expect(result._recommendations!.some(r => r.includes('No journal entry today'))).toBe(true)
   })
 
   it('includes update recommendation when available', async () => {

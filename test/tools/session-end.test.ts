@@ -4,35 +4,51 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { handleSessionEnd } from '../../src/tools/session-end.js'
-import { loadEngrams } from '../../src/engrams.js'
+import { getPlur, resetPlur } from '../../src/plur-bridge.js'
 import { loadConfig, resetConfigCache } from '../../src/config.js'
 import type { StorageConfig } from '../../src/storage.js'
 
-describe('datacore.session.end', () => {
-  const tmpDir = path.join(os.tmpdir(), 'session-end-test-' + Date.now())
-  const journalDir = path.join(tmpDir, 'journal')
-  const engramsPath = path.join(tmpDir, 'engrams.yaml')
-  const knowledgeDir = path.join(tmpDir, 'knowledge')
-  const packsDir = path.join(tmpDir, 'packs')
-
-  const storage: StorageConfig = {
-    mode: 'core',
-    basePath: tmpDir,
-    engramsPath,
-    journalPath: journalDir,
-    knowledgePath: knowledgeDir,
-    packsPath: packsDir,
-  }
+describe('datacore.session.end (PLUR-backed)', () => {
+  let tmpDir: string
+  let journalDir: string
+  let storage: StorageConfig
 
   beforeEach(() => {
-    resetConfigCache()
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-end-test-'))
+    journalDir = path.join(tmpDir, 'journal')
     fs.mkdirSync(journalDir, { recursive: true })
-    fs.mkdirSync(knowledgeDir, { recursive: true })
-    fs.mkdirSync(packsDir, { recursive: true })
-    fs.writeFileSync(engramsPath, 'engrams: []\n')
+    fs.mkdirSync(path.join(tmpDir, 'knowledge'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'packs'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'exchange', 'inbox'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'exchange', 'outbox'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'archive'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'state'), { recursive: true })
+
+    storage = {
+      mode: 'core' as const,
+      basePath: tmpDir,
+      engramsPath: path.join(tmpDir, 'engrams.yaml'),
+      journalPath: journalDir,
+      knowledgePath: path.join(tmpDir, 'knowledge'),
+      spaces: [{ name: 'core', journalPath: journalDir, knowledgePath: path.join(tmpDir, 'knowledge') }],
+      packsPath: path.join(tmpDir, 'packs'),
+      schemasPath: path.join(tmpDir, 'schemas.yaml'),
+      exchangeInboxPath: path.join(tmpDir, 'exchange', 'inbox'),
+      exchangeOutboxPath: path.join(tmpDir, 'exchange', 'outbox'),
+      knowledgeSurfacingPath: path.join(tmpDir, 'state', 'knowledge-surfacing.yaml'),
+      archivePath: path.join(tmpDir, 'archive'),
+      statePath: path.join(tmpDir, 'state'),
+    }
+
+    process.env.PLUR_PATH = tmpDir
+    resetPlur()
+    resetConfigCache()
     loadConfig(tmpDir, 'core')
   })
+
   afterEach(() => {
+    delete process.env.PLUR_PATH
+    resetPlur()
     resetConfigCache()
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
@@ -44,7 +60,7 @@ describe('datacore.session.end', () => {
     expect(fs.existsSync(result.journal_path!)).toBe(true)
   })
 
-  it('creates active engrams from suggestions by default (auto_promote)', async () => {
+  it('creates engrams from suggestions via PLUR', async () => {
     const result = await handleSessionEnd({
       summary: 'Session summary',
       engram_suggestions: [
@@ -53,26 +69,40 @@ describe('datacore.session.end', () => {
       ],
     }, storage)
     expect(result.engrams_created).toBe(2)
-    const engrams = loadEngrams(engramsPath)
-    expect(engrams).toHaveLength(2)
-    expect(engrams[0].status).toBe('active')
+
+    // Verify engrams exist in PLUR store
+    const plur = getPlur()
+    const all = plur.list()
+    expect(all.length).toBeGreaterThanOrEqual(2)
+    expect(all.some(e => e.statement === 'Always test before merge')).toBe(true)
+    expect(all.some(e => e.statement === 'Use atomic writes for YAML')).toBe(true)
   })
 
-  it('creates candidate engrams when auto_promote is off', async () => {
-    fs.writeFileSync(path.join(tmpDir, 'config.yaml'), 'engrams:\n  auto_promote: false\n')
-    loadConfig(tmpDir, 'core')
+  it('returns journal_path', async () => {
+    const result = await handleSessionEnd({ summary: 'Done for today' }, storage)
+    expect(result.journal_path).toBeTruthy()
+    expect(result.journal_path!).toContain('journal')
+    const content = fs.readFileSync(result.journal_path!, 'utf8')
+    expect(content).toContain('Done for today')
+  })
 
-    const result = await handleSessionEnd({
-      summary: 'Session summary',
-      engram_suggestions: [{ statement: 'Test assertion' }],
-    }, storage)
-    expect(result.engrams_created).toBe(1)
-    expect(result._hints?.next).toContain('candidates')
+  it('works with no suggestions', async () => {
+    const result = await handleSessionEnd({ summary: 'Quick session' }, storage)
+    expect(result.engrams_created).toBe(0)
+    expect(result.journal_path).toBeTruthy()
   })
 
   it('includes hints about session capture', async () => {
     const result = await handleSessionEnd({ summary: 'Done' }, storage)
     expect(result._hints?.next).toContain('Session captured')
     expect(result._hints?.related).toContain('datacore.session.start')
+  })
+
+  it('includes engram count in hints when suggestions created', async () => {
+    const result = await handleSessionEnd({
+      summary: 'Session with learnings',
+      engram_suggestions: [{ statement: 'Test hint content' }],
+    }, storage)
+    expect(result._hints?.next).toContain('1 engram(s) created')
   })
 })

@@ -1,97 +1,72 @@
 // test/tools/recall.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { Plur } from '@plur-ai/core'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { handleRecall } from '../../src/tools/recall.js'
 import { loadConfig, resetConfigCache } from '../../src/config.js'
+import { resetPlur } from '../../src/plur-bridge.js'
 
 describe('datacore.recall', () => {
-  const tmpDir = path.join(os.tmpdir(), 'recall-test-' + Date.now())
-  const journalDir = path.join(tmpDir, 'journal')
-  const knowledgeDir = path.join(tmpDir, 'knowledge')
-  const engramsPath = path.join(tmpDir, 'engrams.yaml')
-
-  const storagePaths = {
-    engramsPath,
-    journalPath: journalDir,
-    knowledgePath: knowledgeDir,
-  }
+  let tmpDir: string
+  let journalDir: string
+  let knowledgeDir: string
 
   beforeEach(() => {
     resetConfigCache()
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'recall-test-'))
+    journalDir = path.join(tmpDir, 'journal')
+    knowledgeDir = path.join(tmpDir, 'knowledge')
     fs.mkdirSync(journalDir, { recursive: true })
     fs.mkdirSync(knowledgeDir, { recursive: true })
-    fs.writeFileSync(engramsPath, 'engrams: []\n')
+    process.env.PLUR_PATH = tmpDir
+    resetPlur()
     loadConfig(tmpDir, 'core')
   })
+
   afterEach(() => {
+    delete process.env.PLUR_PATH
+    resetPlur()
     resetConfigCache()
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
+  const storagePaths = () => ({
+    journalPath: journalDir,
+    knowledgePath: knowledgeDir,
+  })
+
   it('searches engrams by keyword overlap', async () => {
-    fs.writeFileSync(engramsPath, `engrams:
-  - id: ENG-2026-0221-001
-    version: 2
-    status: active
-    consolidated: false
-    type: behavioral
-    scope: global
-    visibility: private
-    statement: Always validate input at system boundaries
-    derivation_count: 1
-    tags: [validation, testing]
-    activation:
-      retrieval_strength: 0.7
-      storage_strength: 1.0
-      frequency: 3
-      last_accessed: "2026-02-21"
-    pack: null
-    abstract: null
-    derived_from: null
-`)
-    const result = await handleRecall({ topic: 'validate input', sources: ['engrams'] }, storagePaths)
+    const plur = new Plur({ path: tmpDir })
+    plur.learn('Always validate input at system boundaries', {
+      tags: ['validation', 'testing'],
+    })
+
+    const result = await handleRecall({ topic: 'validate input', sources: ['engrams'] }, storagePaths())
     expect(result.engrams).toBeDefined()
     expect(result.engrams!.length).toBe(1)
-    expect(result.engrams![0].id).toBe('ENG-2026-0221-001')
   })
 
   it('excludes retired engrams', async () => {
-    fs.writeFileSync(engramsPath, `engrams:
-  - id: ENG-2026-0221-001
-    version: 2
-    status: retired
-    consolidated: false
-    type: behavioral
-    scope: global
-    visibility: private
-    statement: Always validate input
-    derivation_count: 1
-    tags: []
-    activation:
-      retrieval_strength: 0.1
-      storage_strength: 0.1
-      frequency: 0
-      last_accessed: "2026-01-01"
-    pack: null
-    abstract: null
-    derived_from: null
-`)
-    const result = await handleRecall({ topic: 'validate input', sources: ['engrams'] }, storagePaths)
+    const plur = new Plur({ path: tmpDir })
+    const engram = plur.learn('Always validate input')
+    plur.forget(engram.id)
+
+    const result = await handleRecall({ topic: 'validate input', sources: ['engrams'] }, storagePaths())
     expect(result.engrams).toBeUndefined()
   })
 
   it('searches journal files', async () => {
     fs.writeFileSync(path.join(journalDir, '2026-02-21.md'), '# 2026-02-21\n\nWorked on testing frameworks')
-    const result = await handleRecall({ topic: 'testing', sources: ['journal'] }, storagePaths)
+    const result = await handleRecall({ topic: 'testing', sources: ['journal'] }, storagePaths())
     expect(result.journal).toBeDefined()
     expect(result.journal!.length).toBeGreaterThan(0)
   })
 
   it('searches knowledge files', async () => {
     fs.writeFileSync(path.join(knowledgeDir, 'patterns.md'), '# Design Patterns\n\nFactory pattern for object creation')
-    const result = await handleRecall({ topic: 'factory pattern', sources: ['knowledge'] }, storagePaths)
+    const result = await handleRecall({ topic: 'factory pattern', sources: ['knowledge'] }, storagePaths())
     expect(result.knowledge).toBeDefined()
     expect(result.knowledge!.length).toBeGreaterThan(0)
   })
@@ -99,20 +74,19 @@ describe('datacore.recall', () => {
   it('searches all sources by default', async () => {
     fs.writeFileSync(path.join(journalDir, '2026-02-21.md'), '# Testing notes\n\nUnit testing practices')
     fs.writeFileSync(path.join(knowledgeDir, 'testing.md'), '# Testing\n\nIntegration testing approach')
-    const result = await handleRecall({ topic: 'testing' }, storagePaths)
-    // Should have journal and/or knowledge results
+    const result = await handleRecall({ topic: 'testing' }, storagePaths())
     expect(result.journal || result.knowledge).toBeTruthy()
   })
 
   it('omits source keys with zero results', async () => {
-    const result = await handleRecall({ topic: 'nonexistent topic xyz' }, storagePaths)
+    const result = await handleRecall({ topic: 'nonexistent topic xyz' }, storagePaths())
     expect(result.engrams).toBeUndefined()
     expect(result.journal).toBeUndefined()
     expect(result.knowledge).toBeUndefined()
   })
 
   it('includes hints', async () => {
-    const result = await handleRecall({ topic: 'anything' }, storagePaths)
+    const result = await handleRecall({ topic: 'anything' }, storagePaths())
     expect(result._hints?.related).toContain('datacore.feedback')
   })
 })

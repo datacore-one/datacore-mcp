@@ -6,8 +6,23 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as yaml from 'js-yaml'
 import { z } from 'zod'
-import { loadEngrams } from './engrams.js'
-import { levenshteinDistance } from './exchange.js'
+import { getPlur } from './plur-bridge.js'
+
+// Inline levenshtein distance (was in deleted exchange.ts)
+function levenshteinDistance(a: string, b: string): number {
+  const m = a.length, n = b.length
+  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i)
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0]
+    dp[0] = i
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j]
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1])
+      prev = tmp
+    }
+  }
+  return dp[n]
+}
 
 // --- Zettel candidate ---
 
@@ -202,7 +217,8 @@ export function consolidationPass(
   engramsPath: string,
   confirm: boolean = false,
 ): ConsolidationResult {
-  const engrams = loadEngrams(engramsPath)
+  const plur = getPlur()
+  const engrams = plur.list()
   const active = engrams.filter(e => e.status === 'active' && !e.pack)
 
   // Low-RS identification
@@ -286,29 +302,14 @@ export function consolidationPass(
   const today = new Date().toISOString().split('T')[0]
 
   if (confirm) {
-    // Execute: retire low-RS and duplicate engrams
+    // Execute: retire low-RS and duplicate engrams via PLUR
     const toRetire = new Set([
       ...lowRs.map(e => e.id),
       ...duplicateClusters.flatMap(c => c.duplicates),
     ])
 
-    for (const engram of engrams) {
-      if (toRetire.has(engram.id)) {
-        engram.status = 'retired'
-      }
-    }
-
-    // Bump derivation_count for representatives
-    for (const cluster of duplicateClusters) {
-      const rep = engrams.find(e => e.id === cluster.representative)
-      if (rep) rep.derivation_count += cluster.duplicates.length
-    }
-
-    if (toRetire.size > 0) {
-      const content = yaml.dump({ engrams }, { lineWidth: 120, noRefs: true, quotingType: '"' })
-      const tmpPath = engramsPath + '.tmp.' + process.pid
-      fs.writeFileSync(tmpPath, content)
-      fs.renameSync(tmpPath, engramsPath)
+    for (const id of toRetire) {
+      plur.forget(id)
     }
   }
 

@@ -1,15 +1,12 @@
 // src/tools/status.ts
 import * as fs from 'fs'
 import * as path from 'path'
-import { loadEngrams } from '../engrams.js'
+import { getPlur } from '../plur-bridge.js'
 import { currentVersion } from '../version.js'
-import { decayedStrength, engramState } from '../decay.js'
 import { verifyPackChecksum } from '../trust.js'
 import { localDate } from './capture.js'
 import { buildHints } from '../hints.js'
-import { formatStatus } from '../engagement/format.js'
 import registry from '../../registry/packs.json'
-import type { EngagementService } from '../engagement/index.js'
 
 interface StatusPaths {
   engramsPath: string
@@ -24,14 +21,13 @@ interface StatusResult {
   version: string
   mode: string
   engrams: number
-  engram_health?: Record<string, number>
+  episodes: number
   packs: number
   pack_integrity?: { name: string; valid: boolean }[]
   journal_entries: number
   knowledge_notes: number
   scaling_hint?: string
   update_available?: string
-  engagement?: { display: string; tier: string; xp: number; reputation: number }
   _recommendations?: string[]
   _hints?: ReturnType<typeof buildHints>
 }
@@ -39,21 +35,11 @@ interface StatusResult {
 export async function handleStatus(
   paths: StatusPaths,
   updateAvailable?: string | null,
-  engagementService?: EngagementService,
 ): Promise<StatusResult> {
-  const engrams = loadEngrams(paths.engramsPath)
+  const plur = getPlur()
+  const plurStatus = plur.status()
   const journalCount = countFiles(paths.journalPath, '.md')
   const knowledgeCount = countFiles(paths.knowledgePath, '.md')
-  const packsCount = countDirs(paths.packsPath)
-
-  // Engram health summary by state
-  const healthCounts: Record<string, number> = { active: 0, fading: 0, dormant: 0, retirement_candidate: 0 }
-  for (const e of engrams) {
-    if (e.status !== 'active') continue
-    const rs = decayedStrength(e.activation.retrieval_strength, e.activation.last_accessed)
-    const state = engramState(rs)
-    healthCounts[state]++
-  }
 
   // Pack integrity check
   const packIntegrity: { name: string; valid: boolean }[] = []
@@ -67,17 +53,6 @@ export async function handleStatus(
 
   // Build recommendations
   const recommendations: string[] = []
-  const candidateCount = engrams.filter(e => e.status === 'candidate').length
-
-  if (healthCounts.retirement_candidate > 0) {
-    recommendations.push(`${healthCounts.retirement_candidate} engrams are retirement candidates. Use datacore.forget to clean up.`)
-  }
-  if (healthCounts.fading > 0) {
-    recommendations.push(`${healthCounts.fading} engrams are fading. Use datacore.feedback with positive signal to reinforce.`)
-  }
-  if (candidateCount > 0) {
-    recommendations.push(`${candidateCount} candidate engrams awaiting review. Use datacore.promote or enable engrams.auto_promote in config.yaml.`)
-  }
 
   // Check for today's journal
   const { date: today } = localDate()
@@ -90,33 +65,15 @@ export async function handleStatus(
     recommendations.push(`Update available: ${updateAvailable}. Run: npm update -g @datacore-one/mcp`)
   }
 
-  // Engagement dashboard
-  let engagement: StatusResult['engagement'] = undefined
-  if (engagementService?.isEnabled()) {
-    try {
-      await engagementService.init()
-      const profile = engagementService.getProfile()
-      if (profile) {
-        engagement = {
-          display: formatStatus(profile),
-          tier: profile.tier.current,
-          xp: profile.xp.total,
-          reputation: profile.reputation.score,
-        }
-      }
-    } catch { /* engagement never breaks core tools */ }
-  }
-
   const statusResult: StatusResult = {
     version: currentVersion,
     mode: paths.mode,
-    engrams: engrams.length,
-    engram_health: healthCounts,
-    packs: packsCount,
+    engrams: plurStatus.engram_count,
+    episodes: plurStatus.episode_count,
+    packs: plurStatus.pack_count,
     pack_integrity: packIntegrity.length > 0 ? packIntegrity : undefined,
     journal_entries: journalCount,
     knowledge_notes: knowledgeCount,
-    engagement,
     _recommendations: recommendations.length > 0 ? recommendations : undefined,
     _hints: buildHints({
       next: recommendations.length > 0
@@ -126,8 +83,8 @@ export async function handleStatus(
     }),
   }
 
-  if (engrams.length >= 500) {
-    statusResult.scaling_hint = `You have ${engrams.length} engrams. Consider migrating to full Datacore for SQLite-backed search.`
+  if (plurStatus.engram_count >= 500) {
+    statusResult.scaling_hint = `You have ${plurStatus.engram_count} engrams. Consider migrating to full Datacore for SQLite-backed search.`
   }
 
   if (updateAvailable) {

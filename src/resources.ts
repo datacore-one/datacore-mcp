@@ -5,7 +5,7 @@ import {
   ReadResourceRequestSchema,
   ListResourceTemplatesRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
-import { loadEngrams } from './engrams.js'
+import { getPlur } from './plur-bridge.js'
 import { localDate } from './tools/capture.js'
 import type { StorageConfig } from './storage.js'
 import * as fs from 'fs'
@@ -64,23 +64,23 @@ export function registerResources(server: Server, storage: StorageConfig): void 
   // Read resource
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     const uri = request.params.uri
+    const plur = getPlur()
 
     // Static: datacore://status
     if (uri === 'datacore://status') {
-      const engrams = loadEngrams(storage.engramsPath)
-      const active = engrams.filter(e => e.status === 'active').length
+      const plurStatus = plur.status()
       return {
         contents: [{
           uri,
           mimeType: 'application/json',
-          text: JSON.stringify({ version: currentVersion, mode: storage.mode, engrams: engrams.length, active }),
+          text: JSON.stringify({ version: currentVersion, mode: storage.mode, engrams: plurStatus.engram_count, episodes: plurStatus.episode_count }),
         }],
       }
     }
 
     // Static: datacore://engrams/active
     if (uri === 'datacore://engrams/active') {
-      const engrams = loadEngrams(storage.engramsPath).filter(e => e.status === 'active')
+      const engrams = plur.list()
       return {
         contents: [{
           uri,
@@ -115,8 +115,7 @@ export function registerResources(server: Server, storage: StorageConfig): void 
     // Template: datacore://engrams/{id}
     const engramMatch = uri.match(/^datacore:\/\/engrams\/(.+)$/)
     if (engramMatch) {
-      const engrams = loadEngrams(storage.engramsPath)
-      const engram = engrams.find(e => e.id === engramMatch[1])
+      const engram = plur.getById(engramMatch[1])
       if (!engram) {
         throw new Error(`Engram not found: ${engramMatch[1]}`)
       }

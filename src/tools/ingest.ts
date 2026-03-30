@@ -1,6 +1,7 @@
 // src/tools/ingest.ts
 import * as fs from 'fs'
 import * as path from 'path'
+import { getPlur } from '../plur-bridge.js'
 import { validateContent, validateTitle } from '../limits.js'
 import { buildHints } from '../hints.js'
 
@@ -13,7 +14,7 @@ interface IngestArgs {
 interface IngestResult {
   success: boolean
   note_path?: string
-  engram_suggestions?: string[]
+  engram_candidates?: { statement: string; type: string }[]
   error?: string
   _hints?: ReturnType<typeof buildHints>
 }
@@ -28,6 +29,7 @@ export async function handleIngest(
     const titleError = validateTitle(args.title)
     if (titleError) return { success: false, error: titleError }
   }
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const slug = (args.title ?? 'ingested').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50)
   const fileName = `${timestamp}-${slug}.md`
@@ -39,39 +41,19 @@ export async function handleIngest(
   const tagLine = args.tags?.length ? `\n${args.tags.map(t => `#${t}`).join(' ')}\n` : ''
   fs.writeFileSync(filePath, `${frontmatter}${args.content}\n${tagLine}`)
 
-  const suggestions = extractEngramSuggestions(args.content)
+  // Use PLUR for engram extraction (extract_only: true to not auto-save)
+  const plur = getPlur()
+  const candidates = plur.ingest(args.content, { extract_only: true, source: filePath })
 
   return {
     success: true,
     note_path: filePath,
-    engram_suggestions: suggestions.length > 0 ? suggestions : undefined,
-    _hints: suggestions.length > 0
+    engram_candidates: candidates.length > 0 ? candidates.map(c => ({ statement: c.statement, type: c.type })) : undefined,
+    _hints: candidates.length > 0
       ? buildHints({
-          next: `Call datacore.learn for each suggestion to create engrams. Example: datacore.learn({statement: '${suggestions[0]}', type: 'behavioral'})`,
+          next: `Call datacore.learn for each suggestion to create engrams. Example: datacore.learn({statement: '${candidates[0].statement}', type: '${candidates[0].type}'})`,
           related: ['datacore.learn'],
         })
       : undefined,
   }
-}
-
-export function extractEngramSuggestions(content: string): string[] {
-  // Require sentence-start context to reduce mid-sentence false positives
-  const patterns = [
-    /(?:^|[.!?]\s+)(always\s+\w[\w\s]*?)(?:\.|$)/gim,
-    /(?:^|[.!?]\s+)(never\s+\w[\w\s]*?)(?:\.|$)/gim,
-    /(?:^|[.!?]\s+)(prefer\s+\w[\w\s]*?)(?:\.|$)/gim,
-    /(?:^|[.!?]\s+)(avoid\s+\w[\w\s]*?)(?:\.|$)/gim,
-    /(?:^|[.!?]\s+)(ensure\s+\w[\w\s]*?)(?:\.|$)/gim,
-  ]
-
-  const suggestions: string[] = []
-  for (const pattern of patterns) {
-    for (const match of content.matchAll(pattern)) {
-      const suggestion = match[1].trim()
-      if (suggestion.length >= 8 && suggestion.length <= 180) {
-        suggestions.push(suggestion)
-      }
-    }
-  }
-  return suggestions
 }

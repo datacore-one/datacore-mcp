@@ -4,43 +4,82 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { handleSessionStart } from '../../src/tools/session-start.js'
+import { getPlur, resetPlur } from '../../src/plur-bridge.js'
 import { loadConfig, resetConfigCache } from '../../src/config.js'
 import type { StorageConfig } from '../../src/storage.js'
 
-describe('datacore.session.start', () => {
-  const tmpDir = path.join(os.tmpdir(), 'session-start-test-' + Date.now())
-  const journalDir = path.join(tmpDir, 'journal')
-  const engramsPath = path.join(tmpDir, 'engrams.yaml')
-  const packsDir = path.join(tmpDir, 'packs')
-  const knowledgeDir = path.join(tmpDir, 'knowledge')
-
-  const storage: StorageConfig = {
-    mode: 'core',
-    basePath: tmpDir,
-    engramsPath,
-    journalPath: journalDir,
-    knowledgePath: knowledgeDir,
-    packsPath: packsDir,
-  }
+describe('datacore.session.start (PLUR-backed)', () => {
+  let tmpDir: string
+  let journalDir: string
+  let storage: StorageConfig
 
   beforeEach(() => {
-    resetConfigCache()
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'session-start-test-'))
+    journalDir = path.join(tmpDir, 'journal')
     fs.mkdirSync(journalDir, { recursive: true })
-    fs.mkdirSync(packsDir, { recursive: true })
-    fs.mkdirSync(knowledgeDir, { recursive: true })
-    fs.writeFileSync(engramsPath, 'engrams: []\n')
+    fs.mkdirSync(path.join(tmpDir, 'knowledge'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'packs'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'exchange', 'inbox'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'exchange', 'outbox'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'archive'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'state'), { recursive: true })
+
+    storage = {
+      mode: 'core' as const,
+      basePath: tmpDir,
+      engramsPath: path.join(tmpDir, 'engrams.yaml'),
+      journalPath: journalDir,
+      knowledgePath: path.join(tmpDir, 'knowledge'),
+      spaces: [{ name: 'core', journalPath: journalDir, knowledgePath: path.join(tmpDir, 'knowledge') }],
+      packsPath: path.join(tmpDir, 'packs'),
+      schemasPath: path.join(tmpDir, 'schemas.yaml'),
+      exchangeInboxPath: path.join(tmpDir, 'exchange', 'inbox'),
+      exchangeOutboxPath: path.join(tmpDir, 'exchange', 'outbox'),
+      knowledgeSurfacingPath: path.join(tmpDir, 'state', 'knowledge-surfacing.yaml'),
+      archivePath: path.join(tmpDir, 'archive'),
+      statePath: path.join(tmpDir, 'state'),
+    }
+
+    process.env.PLUR_PATH = tmpDir
+    resetPlur()
+    resetConfigCache()
     loadConfig(tmpDir, 'core')
   })
+
   afterEach(() => {
+    delete process.env.PLUR_PATH
+    resetPlur()
     resetConfigCache()
     fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('returns a session_id', async () => {
+    const result = await handleSessionStart({}, storage)
+    expect(result.session_id).toBeTruthy()
+    expect(result.session_id).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it('injects engrams when task is given', async () => {
+    const plur = getPlur()
+    plur.learn('Always validate data ownership before processing', {
+      type: 'behavioral',
+      tags: ['data', 'ownership'],
+    })
+
+    const result = await handleSessionStart({ task: 'design a data ownership model' }, storage)
+    expect(result.engrams).not.toBeNull()
+    expect(result.engrams!.count).toBeGreaterThan(0)
+    expect(result.engrams!.text).toContain('validate data ownership')
+  })
+
+  it('returns null engrams when no task is given', async () => {
+    const result = await handleSessionStart({}, storage)
+    expect(result.engrams).toBeNull()
   })
 
   it('returns null journal when no entry exists today', async () => {
     const result = await handleSessionStart({}, storage)
     expect(result.journal_today).toBeNull()
-    expect(result.engrams).toBeNull()
-    expect(result.pending_candidates).toBe(0)
   })
 
   it('returns journal content when today has an entry', async () => {
@@ -50,75 +89,35 @@ describe('datacore.session.start', () => {
     expect(result.journal_today).toContain('Some notes')
   })
 
-  it('counts pending candidates', async () => {
-    fs.writeFileSync(engramsPath, `engrams:
-  - id: ENG-2026-0221-001
-    version: 2
-    status: candidate
-    consolidated: false
-    type: behavioral
-    scope: global
-    visibility: private
-    statement: Test engram
-    derivation_count: 1
-    tags: []
-    activation:
-      retrieval_strength: 0.5
-      storage_strength: 0.3
-      frequency: 0
-      last_accessed: "2026-02-21"
-    pack: null
-    abstract: null
-    derived_from: null
-`)
+  it('pending_candidates is always 0 (PLUR auto-promotes)', async () => {
     const result = await handleSessionStart({}, storage)
-    expect(result.pending_candidates).toBe(1)
-    expect(result.recommendations.length).toBeGreaterThan(0)
+    expect(result.pending_candidates).toBe(0)
   })
 
-  it('includes no-task hint when task not provided', async () => {
-    const result = await handleSessionStart({}, storage)
-    expect(result._hints?.next).toContain('No task specified')
-    expect(result._hints?.related).toContain('datacore.inject')
-  })
-
-  it('includes task hint when task provided', async () => {
-    const result = await handleSessionStart({ task: 'Write tests' }, storage)
-    expect(result._hints?.next).toContain('Work on your task')
-    expect(result._hints?.related).toContain('datacore.session.end')
-  })
-
-  it('includes full guide when no active engrams exist (fresh install)', async () => {
+  it('shows full guide when no engrams injected', async () => {
     const result = await handleSessionStart({}, storage)
     expect(result.guide).toContain('Quick Start')
     expect(result.guide).toContain('Session Workflow')
-    expect(result.guide).toContain('Use Proactively')
-    expect(result.guide).toContain('How Engrams Work')
   })
 
-  it('includes short guide when active engrams exist', async () => {
-    fs.writeFileSync(engramsPath, `engrams:
-  - id: ENG-2026-0221-001
-    version: 2
-    status: active
-    consolidated: false
-    type: behavioral
-    scope: global
-    visibility: private
-    statement: Test active engram
-    derivation_count: 1
-    tags: []
-    activation:
-      retrieval_strength: 0.7
-      storage_strength: 1.0
-      frequency: 1
-      last_accessed: "2026-02-21"
-    pack: null
-    abstract: null
-    derived_from: null
-`)
-    const result = await handleSessionStart({}, storage)
+  it('shows short guide when engrams are injected', async () => {
+    const plur = getPlur()
+    plur.learn('Test engram for guide check', { type: 'behavioral' })
+
+    const result = await handleSessionStart({ task: 'test guide check' }, storage)
     expect(result.guide).toContain('Session started')
     expect(result.guide).not.toContain('Quick Start')
+  })
+
+  it('includes hints', async () => {
+    const result = await handleSessionStart({}, storage)
+    expect(result._hints).toBeDefined()
+    expect(result._hints?.next).toContain('No task specified')
+  })
+
+  it('includes task-specific hints when task provided', async () => {
+    const result = await handleSessionStart({ task: 'Write tests' }, storage)
+    expect(result._hints?.next).toContain('Work on your task')
+    expect(result._hints?.related).toContain('datacore.session.end')
   })
 })
