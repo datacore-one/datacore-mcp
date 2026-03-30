@@ -1,25 +1,30 @@
 // test/regression/status-disabled.test.ts
-// Verify handleStatus works correctly (it does not take a service param).
+// Verify handleStatus works correctly with PLUR backend
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { loadConfig, resetConfigCache } from '../../src/config.js'
 import { handleStatus } from '../../src/tools/status.js'
+import { resetPlur } from '../../src/plur-bridge.js'
 
 describe('regression: status (engagement-independent)', () => {
-  const tmpDir = path.join(os.tmpdir(), 'reg-status-disabled-' + Date.now())
+  let tmpDir: string
 
   beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reg-status-'))
+    process.env.PLUR_PATH = tmpDir
+    resetPlur()
     resetConfigCache()
     fs.mkdirSync(path.join(tmpDir, 'journal'), { recursive: true })
     fs.mkdirSync(path.join(tmpDir, 'knowledge'), { recursive: true })
     fs.mkdirSync(path.join(tmpDir, 'packs'), { recursive: true })
-    fs.writeFileSync(path.join(tmpDir, 'engrams.yaml'), 'engrams: []\n')
     loadConfig(tmpDir, 'core')
   })
 
   afterEach(() => {
+    delete process.env.PLUR_PATH
+    resetPlur()
     resetConfigCache()
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
