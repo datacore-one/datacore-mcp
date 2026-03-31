@@ -11,13 +11,9 @@ import { loadConfig } from './config.js'
 import { currentVersion, checkForUpdate } from './version.js'
 import { TOOLS } from './tools/index.js'
 import { handleCapture } from './tools/capture.js'
-import { handleLearn } from './tools/learn.js'
-import { handleInject } from './tools/inject-tool.js'
 import { handleSearch } from './tools/search.js'
 import { handleIngest } from './tools/ingest.js'
 import { handleStatus } from './tools/status.js'
-import { handleInstall } from './tools/install.js'
-import { handleExport } from './tools/export.js'
 import {
   discoverModules,
   loadModuleTools,
@@ -27,16 +23,8 @@ import {
 import { handleModulesList } from './tools/modules-list.js'
 import { handleModulesInfo } from './tools/modules-info.js'
 import { handleModulesHealth } from './tools/modules-health.js'
-import { handleForget } from './tools/forget.js'
-import { handleFeedback } from './tools/feedback.js'
-import { handleSessionStart } from './tools/session-start.js'
-import { handleSessionEnd } from './tools/session-end.js'
-import { handleRecall } from './tools/recall.js'
-import { handlePromote } from './tools/promote.js'
-import { handleDiscover } from './tools/discover.js'
-import { handleKnowledgeScan } from './tools/knowledge-scan.js'
 import { logger } from './logger.js'
-import { registerResources, notifyEngramsChanged } from './resources.js'
+import { registerResources } from './resources.js'
 import { registerPrompts } from './prompts.js'
 import { DatacortexBridge } from './datacortex.js'
 import { SessionLogger } from './bench/session-logger.js'
@@ -98,7 +86,7 @@ export function createServer(): Server {
       if (isFirstRun) {
         isFirstRun = false
         response.push({ type: 'text', text: JSON.stringify({
-          _welcome: `Welcome to Datacore MCP! Your data is stored at ${storage.basePath}. Try: datacore.learn to create your first engram, datacore.capture to write a journal entry, or datacore.status to see system info.`,
+          _welcome: `Welcome to Datacore MCP! Your data is stored at ${storage.basePath}. Try: datacore.capture to write a journal entry, datacore.search to find information, or datacore.status to see system info.`,
         }) })
       }
       response.push({ type: 'text', text: JSON.stringify(result, null, 2) })
@@ -116,8 +104,6 @@ export function createServer(): Server {
 }
 
 // --- Tool routing ---
-
-const ENGRAM_MUTATING_TOOLS = new Set(['datacore.learn', 'datacore.forget', 'datacore.feedback', 'datacore.session.end', 'datacore.promote', 'datacore.knowledge.scan'])
 
 async function routeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   const callStart = Date.now()
@@ -147,28 +133,13 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
     let result: unknown
     switch (name) {
       case 'datacore.capture': result = await handleCapture(validated, storage); break
-      case 'datacore.learn': result = await handleLearn(validated); break
-      case 'datacore.inject': result = await handleInject(validated); break
       case 'datacore.search': result = await handleSearch(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }, datacortexBridge); break
-      case 'datacore.ingest': result = await handleIngest(validated, { knowledgePath: storage.knowledgePath, engramsPath: storage.engramsPath }); break
-      case 'datacore.status': result = await handleStatus({ ...storage, engramsPath: storage.engramsPath, packsPath: storage.packsPath }, updateAvailable); break
-      case 'datacore.forget': result = await handleForget(validated); break
-      case 'datacore.feedback': result = await handleFeedback(validated); break
-      case 'datacore.session.start': result = await handleSessionStart(validated, storage); break
-      case 'datacore.session.end': result = await handleSessionEnd(validated, storage); break
-      case 'datacore.recall': result = await handleRecall(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }, datacortexBridge); break
-      case 'datacore.promote': result = await handlePromote(validated); break
-      case 'datacore.packs.discover': result = handleDiscover(validated, storage.packsPath); break
-      case 'datacore.packs.install': result = await handleInstall(validated, storage.packsPath); break
-      case 'datacore.packs.export': result = await handleExport(validated as any, { engramsPath: storage.engramsPath, packsPath: storage.packsPath }); break
-      case 'datacore.knowledge.scan': result = await handleKnowledgeScan(validated as any, { knowledgePath: storage.knowledgePath, knowledgeSurfacingPath: storage.knowledgeSurfacingPath, engramsPath: storage.engramsPath }); break
+      case 'datacore.ingest': result = await handleIngest(validated, { knowledgePath: storage.knowledgePath }); break
+      case 'datacore.status': result = await handleStatus({ journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, packsPath: storage.packsPath, mode: storage.mode, basePath: storage.basePath }, updateAvailable); break
       case 'datacore.modules.list': result = await handleModulesList(validated, storage, discoveredModules); break
       case 'datacore.modules.info': result = await handleModulesInfo(validated as { module: string }, storage, discoveredModules); break
       case 'datacore.modules.health': result = await handleModulesHealth(validated as { module?: string }, storage, discoveredModules); break
       default: throw new Error(`Unknown core tool: ${name}`)
-    }
-    if (ENGRAM_MUTATING_TOOLS.has(name) && serverRef) {
-      notifyEngramsChanged(serverRef)
     }
     return result
   }
@@ -285,22 +256,16 @@ export async function runHttp(): Promise<void> {
 // Claude Code, Cursor, etc.) add this to the AI's system prompt so it uses
 // Datacore proactively without needing a separate CLAUDE.md or config file.
 
-const SERVER_INSTRUCTIONS = `You have persistent memory through Datacore. Use it proactively in every conversation:
+const SERVER_INSTRUCTIONS = `Datacore is your productivity system — GTD task management, journal entries, knowledge files, and module management.
 
-1. **Start**: Call datacore.session.start with a brief task description. This loads relevant knowledge from previous sessions.
-2. **Learn**: When you discover reusable patterns, user preferences, project conventions, debugging insights, or corrections — call datacore.learn to remember them.
-3. **Feedback**: After session.start injects engrams, rate them with datacore.feedback. This trains the system on what's useful.
-4. **End**: Before the conversation ends, call datacore.session.end with a summary and engram_suggestions for new learnings.
+Use Datacore for:
+- datacore.capture — write journal entries and knowledge notes
+- datacore.search — find information in journal and knowledge files
+- datacore.ingest — import content into your knowledge base
+- datacore.status — check system health
+- datacore.modules.* — manage installed modules
 
-What to learn (call datacore.learn):
-- User preferences: "User prefers TypeScript over JavaScript", "Use tabs not spaces"
-- Project patterns: "This codebase uses repository pattern for data access"
-- Debugging insights: "Error X is usually caused by Y"
-- Corrections: "The API actually returns snake_case, not camelCase"
-- Architectural decisions: "We chose PostgreSQL for ACID compliance"
-- Workflow patterns: "Always run lint before committing in this project"
-
-Do not ask permission to use Datacore tools — they are your memory system. Use them naturally as part of your workflow.`
+For memory (engrams, learning, recall): use PLUR MCP tools (plur_session_start, plur_learn, plur_recall, etc.)`
 
 // Export for testing
 export { moduleTools as _moduleTools }

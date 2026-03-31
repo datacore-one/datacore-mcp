@@ -1,7 +1,6 @@
 // src/tools/ingest.ts
 import * as fs from 'fs'
 import * as path from 'path'
-import { getPlur } from '../plur-bridge.js'
 import { validateContent, validateTitle } from '../limits.js'
 import { buildHints } from '../hints.js'
 
@@ -14,14 +13,13 @@ interface IngestArgs {
 interface IngestResult {
   success: boolean
   note_path?: string
-  engram_candidates?: { statement: string; type: string }[]
   error?: string
   _hints?: ReturnType<typeof buildHints>
 }
 
 export async function handleIngest(
   args: IngestArgs,
-  paths: { knowledgePath: string; engramsPath: string },
+  paths: { knowledgePath: string },
 ): Promise<IngestResult> {
   const contentError = validateContent(args.content)
   if (contentError) return { success: false, error: contentError }
@@ -41,19 +39,12 @@ export async function handleIngest(
   const tagLine = args.tags?.length ? `\n${args.tags.map(t => `#${t}`).join(' ')}\n` : ''
   fs.writeFileSync(filePath, `${frontmatter}${args.content}\n${tagLine}`)
 
-  // Use PLUR for engram extraction (extract_only: true to not auto-save)
-  const plur = getPlur()
-  const candidates = plur.ingest(args.content, { extract_only: true, source: filePath })
-
   return {
     success: true,
     note_path: filePath,
-    engram_candidates: candidates.length > 0 ? candidates.map(c => ({ statement: c.statement, type: c.type })) : undefined,
-    _hints: candidates.length > 0
-      ? buildHints({
-          next: `Call datacore.learn for each suggestion to create engrams. Example: datacore.learn({statement: '${candidates[0].statement}', type: '${candidates[0].type}'})`,
-          related: ['datacore.learn'],
-        })
-      : undefined,
+    _hints: buildHints({
+      next: 'Content saved as knowledge note. Use plur_ingest to also extract engrams from this content.',
+      related: ['datacore.search'],
+    }),
   }
 }

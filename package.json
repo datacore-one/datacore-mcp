@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@plur-ai/core": "file:../../../5-plur/2-projects/plur/packages/core",
     "better-sqlite3": "^12.8.0",
     "js-yaml": "^4.1.0",
     "zod": "^3.23.0",

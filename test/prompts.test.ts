@@ -23,10 +23,9 @@ describe('MCP Prompts', () => {
   it('lists all prompts', async () => {
     const listHandler = [...handlers.values()][0]
     const result = await listHandler()
-    expect(result.prompts).toHaveLength(3)
+    expect(result.prompts).toHaveLength(2)
     const names = result.prompts.map((p: any) => p.name)
-    expect(names).toContain('datacore-session')
-    expect(names).toContain('datacore-learn')
+    expect(names).toContain('datacore-capture')
     expect(names).toContain('datacore-guide')
   })
 
@@ -39,24 +38,6 @@ describe('MCP Prompts', () => {
     }
   })
 
-  it('datacore-session prompt has optional task argument', async () => {
-    const listHandler = [...handlers.values()][0]
-    const result = await listHandler()
-    const session = result.prompts.find((p: any) => p.name === 'datacore-session')
-    expect(session.arguments).toHaveLength(1)
-    expect(session.arguments[0].name).toBe('task')
-    expect(session.arguments[0].required).toBe(false)
-  })
-
-  it('datacore-learn prompt has required statement argument', async () => {
-    const listHandler = [...handlers.values()][0]
-    const result = await listHandler()
-    const learn = result.prompts.find((p: any) => p.name === 'datacore-learn')
-    expect(learn.arguments).toHaveLength(1)
-    expect(learn.arguments[0].name).toBe('statement')
-    expect(learn.arguments[0].required).toBe(true)
-  })
-
   it('datacore-guide prompt has no arguments', async () => {
     const listHandler = [...handlers.values()][0]
     const result = await listHandler()
@@ -65,42 +46,23 @@ describe('MCP Prompts', () => {
   })
 
   describe('GetPrompt', () => {
-    it('returns session prompt with task', async () => {
+    it('returns capture prompt', async () => {
       const getHandler = [...handlers.values()][1]
-      const result = await getHandler({ params: { name: 'datacore-session', arguments: { task: 'fix the login bug' } } })
+      const result = await getHandler({ params: { name: 'datacore-capture', arguments: { type: 'journal' } } })
       expect(result.messages).toHaveLength(1)
       expect(result.messages[0].role).toBe('user')
-      expect(result.messages[0].content.text).toContain('fix the login bug')
-      expect(result.messages[0].content.text).toContain('datacore.session.start')
+      expect(result.messages[0].content.text).toContain('datacore.capture')
     })
 
-    it('returns session prompt without task', async () => {
-      const getHandler = [...handlers.values()][1]
-      const result = await getHandler({ params: { name: 'datacore-session' } })
-      expect(result.messages[0].content.text).toContain('datacore.session.start')
-      expect(result.messages[0].content.text).not.toContain('Task:')
-    })
-
-    it('returns learn prompt with statement', async () => {
-      const getHandler = [...handlers.values()][1]
-      const result = await getHandler({ params: { name: 'datacore-learn', arguments: { statement: 'Always test first' } } })
-      expect(result.messages[0].content.text).toContain('Always test first')
-      expect(result.messages[0].content.text).toContain('datacore.learn')
-      expect(result.messages[0].content.text).toContain('candidate')
-    })
-
-    it('returns guide prompt with full reference', async () => {
+    it('returns guide prompt with tool reference', async () => {
       const getHandler = [...handlers.values()][1]
       const result = await getHandler({ params: { name: 'datacore-guide' } })
       const text = result.messages[0].content.text
       expect(result.messages[0].role).toBe('assistant')
-      expect(text).toContain('Session Workflow')
-      expect(text).toContain('Tool Reference')
-      expect(text).toContain('Engram Lifecycle')
-      expect(text).toContain('session.start')
-      expect(text).toContain('session.end')
-      expect(text).toContain('feedback')
-      expect(text).toContain('promote')
+      expect(text).toContain('capture')
+      expect(text).toContain('search')
+      expect(text).toContain('ingest')
+      expect(text).toContain('PLUR')
     })
 
     it('throws for unknown prompt', async () => {
