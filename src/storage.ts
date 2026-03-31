@@ -151,48 +151,61 @@ function generateContextFiles(basePath: string): void {
 }
 
 // Shared guide content used across all context files
-const DATACORE_GUIDE = `Datacore gives AI assistants persistent memory through **engrams** — typed knowledge units
-that get injected into context when relevant. Use it proactively in every conversation.
+const DATACORE_GUIDE = `Datacore provides AI assistants with productivity tools (capture, search, ingest, modules).
+Persistent memory (engrams, sessions, feedback) is handled by **PLUR MCP** — a separate MCP server.
+
+## Two MCP Servers
+
+| Server | Tools | Purpose |
+|--------|-------|---------|
+| **PLUR MCP** | plur_session_start, plur_session_end, plur_learn, plur_recall_hybrid, plur_feedback, plur_forget | Persistent memory |
+| **Datacore MCP** | datacore.capture, datacore.search, datacore.ingest, datacore.status, datacore.modules.* | Productivity |
 
 ## Proactive Behavior
 
-Use Datacore tools automatically — do not wait to be asked:
-- **session.start**: Call at the beginning of every conversation
-- **learn**: Call when you discover patterns, preferences, insights, or corrections
-- **feedback**: Call after engrams are injected to rate usefulness
-- **session.end**: Call before the conversation ends
+Use memory tools automatically — do not wait to be asked:
+- **plur_session_start**: Call at the beginning of every conversation
+- **plur_learn**: Call when you discover patterns, preferences, insights, or corrections
+- **plur_feedback**: Call after engrams are injected to rate usefulness
+- **plur_session_end**: Call before the conversation ends
 
 ## Session Workflow
 
-1. **datacore.session.start** — Call this first. Gets relevant engrams + today's journal.
-2. Work on the task. Use **datacore.recall** to search everything.
-3. **datacore.feedback** — Rate which injected engrams were helpful.
-4. **datacore.session.end** — Capture summary + suggest new engrams.
+1. **plur_session_start** — Call this first. Gets relevant engrams + today's journal.
+2. Work on the task. Use **plur_recall_hybrid** to search memory, **datacore.search** for files.
+3. **plur_feedback** — Rate which injected engrams were helpful.
+4. **plur_session_end** — Capture summary + suggest new engrams.
 
 ## Key Tools
 
+### Memory (PLUR MCP)
+
 | Tool | Purpose |
 |------|---------|
-| session.start | Start here. Begin session with context injection. |
-| session.end | End session, capture journal + new engrams. |
-| learn | Record a reusable pattern, preference, or insight. |
-| inject | Get relevant engrams for a specific task. |
-| recall | Search all sources (engrams + journal + knowledge). |
-| capture | Write a journal entry or knowledge note. |
-| search | Search journal and knowledge files. |
-| ingest | Import text and extract engram suggestions. |
-| feedback | Rate engrams: positive/negative/neutral. |
-| forget | Retire an engram permanently. |
-| status | System health + recommendations. |
-| packs.discover | Browse available engram packs. |
-| packs.install | Install a pack. |
-| packs.export | Export your engrams as a pack. |
+| plur_session_start | Start here. Begin session with context injection. |
+| plur_session_end | End session, capture journal + new engrams. |
+| plur_learn | Record a reusable pattern, preference, or insight. |
+| plur_recall_hybrid | Search engrams by keyword or semantic similarity. |
+| plur_feedback | Rate engrams: positive/negative/neutral. |
+| plur_forget | Retire an engram permanently. |
+
+### Productivity (Datacore MCP)
+
+| Tool | Purpose |
+|------|---------|
+| datacore.capture | Write a journal entry or knowledge note. |
+| datacore.search | Search journal and knowledge files. |
+| datacore.ingest | Import text and extract engram suggestions. |
+| datacore.status | System health + recommendations. |
+| datacore.modules.list | List installed modules. |
+| datacore.modules.info | Detailed info about a module. |
+| datacore.modules.health | Health check for modules. |
 
 ## Engram Lifecycle
 
-learn → active → inject → feedback → stronger/weaker → forget (retire)
+plur_learn → active → inject → plur_feedback → stronger/weaker → plur_forget (retire)
 
-- **active**: Appears in inject results when relevant to the task.
+- **active**: Appears in injection results when relevant to the task.
 - **retired**: Permanently removed from injection.
 - Positive feedback strengthens retrieval. Unused engrams naturally decay over time.
 
@@ -205,48 +218,48 @@ All data is in this directory as plain text files:
 - \`packs/\` — Installed engram packs
 - \`config.yaml\` — Configuration (all fields optional)
 `
-
 const CONTEXT_CLAUDE = `# Datacore
 
-This is a Datacore installation — persistent memory for AI assistants.
+This is a Datacore installation — productivity tools for AI assistants.
 
 ${DATACORE_GUIDE}
 
 ## MCP Tools
 
-All tools are prefixed with \`datacore.\` (e.g., \`datacore.session.start\`).
-Call \`datacore.session.start\` at the beginning of every conversation.
+Productivity tools are prefixed with \`datacore.\` (e.g., \`datacore.capture\`).
+Memory tools use PLUR MCP (e.g., \`plur_session_start\`).
+Call \`plur_session_start\` at the beginning of every conversation.
 `
 
 const CONTEXT_AGENTS = `# AGENTS.md
 
-This directory is managed by [Datacore](https://github.com/datacore-one/mcp) — persistent memory for AI assistants.
+This directory is managed by [Datacore](https://github.com/datacore-one/mcp) — productivity tools for AI assistants.
 
 ${DATACORE_GUIDE}
 
 ## For AI Agents
 
-All tools are available via MCP under the \`datacore.\` namespace.
-Start every session by calling \`datacore.session.start\`.
+Productivity tools are in the \`datacore.\` namespace. Memory tools are in PLUR MCP.
+Start every session by calling \`plur_session_start\`.
 `
 
 const CONTEXT_CURSORRULES = `# Datacore
 
-This directory is managed by Datacore — persistent memory for AI assistants.
-All tools are available via MCP under the \`datacore.\` namespace.
+This directory is managed by Datacore — productivity tools for AI assistants.
+Productivity tools are in the \`datacore.\` namespace. Memory tools are in PLUR MCP.
 
 ${DATACORE_GUIDE}`
 
 const CONTEXT_COPILOT = `# Datacore
 
-This directory is managed by [Datacore](https://github.com/datacore-one/mcp) — persistent memory for AI assistants.
+This directory is managed by [Datacore](https://github.com/datacore-one/mcp) — productivity tools for AI assistants.
 
 ${DATACORE_GUIDE}
 
 ## MCP Integration
 
-All tools are available via MCP under the \`datacore.\` namespace.
-Start every session by calling \`datacore.session.start\`.
+Productivity tools are in the \`datacore.\` namespace. Memory tools are in PLUR MCP.
+Start every session by calling \`plur_session_start\`.
 `
 
 function copyStarterPacks(basePath: string): void {

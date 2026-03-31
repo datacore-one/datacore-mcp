@@ -19,27 +19,19 @@ Usage:
   npx @datacore-one/mcp --version Show version
 
 Tools:
-  Core
-    datacore.capture     Capture a journal entry or knowledge note
-    datacore.learn       Create an engram from a statement
-    datacore.inject      Get relevant engrams for a task
-    datacore.search      Search journal and knowledge by keyword
-    datacore.ingest      Ingest text as knowledge note with engram extraction
-    datacore.status      System status, counts, update info
-
-  Lifecycle
-    datacore.feedback    Signal whether an injected engram was helpful
-    datacore.forget      Retire an engram by ID or search
-
-  Packs
-    datacore.packs.discover    Browse available engram packs
-    datacore.packs.install     Install or upgrade an engram pack
-    datacore.packs.export      Export personal engrams as a shareable pack
+  Productivity
+    datacore.capture         Capture a journal entry or knowledge note
+    datacore.search          Search journal and knowledge by keyword
+    datacore.ingest          Ingest text as knowledge note with engram extraction
+    datacore.status          System status, counts, update info
 
   Modules (full mode)
     datacore.modules.list    List installed modules
     datacore.modules.info    Detailed info about a module
     datacore.modules.health  Health check for modules
+
+  Note: Memory tools (learn, recall, feedback, forget, sessions) are now
+  in PLUR MCP (@plur-ai/mcp). Install separately for persistent memory.
 
 Configuration:
   DATACORE_PATH             Full installation path (default: ~/Data)
