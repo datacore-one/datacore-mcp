@@ -37,6 +37,19 @@ export const TOOLS = [
     inputSchema: z.object({}),
   },
   {
+    name: 'datacore.date',
+    description: 'Canonical date operations — ALWAYS use this instead of typing dates from memory. LLMs hallucinate day-of-week names and anchor to training-era dates. Returns today\'s date, validates day-of-week, adds/subtracts days, parses relative expressions, and formats org-mode timestamps.',
+    inputSchema: z.object({
+      op: z.enum(['today', 'dow', 'validate', 'add', 'sub', 'diff', 'parse', 'org-stamp']).describe('Operation: today (current date+dow), dow (day-of-week for a date), validate (check date matches claimed dow), add/sub (N days from date), diff (days between two dates), parse (relative expression like "next monday"), org-stamp (<YYYY-MM-DD Day>)'),
+      date: z.string().optional().describe('ISO date YYYY-MM-DD (for dow/validate/add/sub/org-stamp)'),
+      date2: z.string().optional().describe('Second date for diff'),
+      day: z.string().optional().describe('Claimed day name (Mon..Sun) for validate'),
+      n: z.number().optional().describe('Number of days for add/sub'),
+      expr: z.string().optional().describe('Relative expression for parse (e.g. "tomorrow", "next monday", "in 3 days")'),
+      inactive: z.boolean().optional().describe('For org-stamp: use [..] instead of <..>'),
+    }),
+  },
+  {
     name: 'datacore.modules.list',
     description: 'List installed modules with scope, version, and capability counts',
     inputSchema: z.object({}),

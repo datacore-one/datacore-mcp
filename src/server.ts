@@ -14,6 +14,7 @@ import { handleCapture } from './tools/capture.js'
 import { handleSearch } from './tools/search.js'
 import { handleIngest } from './tools/ingest.js'
 import { handleStatus } from './tools/status.js'
+import { handleDate } from './tools/date.js'
 import {
   discoverModules,
   loadModuleTools,
@@ -136,6 +137,7 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
       case 'datacore.search': result = await handleSearch(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }, datacortexBridge); break
       case 'datacore.ingest': result = await handleIngest(validated, { knowledgePath: storage.knowledgePath }); break
       case 'datacore.status': result = await handleStatus({ journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, packsPath: storage.packsPath, mode: storage.mode, basePath: storage.basePath }, updateAvailable); break
+      case 'datacore.date': result = await handleDate(validated, storage.basePath); break
       case 'datacore.modules.list': result = await handleModulesList(validated, storage, discoveredModules); break
       case 'datacore.modules.info': result = await handleModulesInfo(validated as { module: string }, storage, discoveredModules); break
       case 'datacore.modules.health': result = await handleModulesHealth(validated as { module?: string }, storage, discoveredModules); break
