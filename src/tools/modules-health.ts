@@ -66,21 +66,33 @@ async function checkModule(
     }
   }
 
-  // Check declared tools have handlers
-  const provides = manifest.provides as { tools?: Array<{ name: string; handler: string }> } | undefined
+  // Check declared tools have handlers.
+  // Modules export tools as `export const tools = [{ name, handler }, ...]`
+  // (see crm/tools/index.js, gtd/tools/index.js, etc). We accept either
+  // that array shape or a top-level named export — older modules may
+  // still use the per-name pattern.
+  const provides = manifest.provides as { tools?: Array<{ name: string; handler?: string }> } | undefined
   const declaredTools = provides?.tools || []
   if (declaredTools.length > 0) {
     const toolsIndex = path.join(mod.modulePath, 'tools', 'index.js')
     if (!fs.existsSync(toolsIndex)) {
       issues.push(`Declares ${declaredTools.length} tools but tools/index.js not found`)
     } else {
-      // Attempt to verify exports match declarations
       try {
         const toolModule = await import(toolsIndex)
+        const arrayTools: Array<{ name: string; handler?: unknown }> =
+          (toolModule.tools as Array<{ name: string; handler?: unknown }>) ??
+          (toolModule.default?.tools as Array<{ name: string; handler?: unknown }>) ??
+          []
+        const exportedNames = new Set(
+          arrayTools.filter(t => typeof t?.handler === 'function').map(t => t.name),
+        )
         for (const tool of declaredTools) {
           const handlerName = tool.handler || tool.name
-          if (typeof toolModule[handlerName] !== 'function') {
-            issues.push(`Tool '${tool.name}' declares handler '${handlerName}' but export not found`)
+          const inArray = exportedNames.has(tool.name)
+          const asNamedExport = typeof toolModule[handlerName] === 'function'
+          if (!inArray && !asNamedExport) {
+            issues.push(`Tool '${tool.name}' declared in module.yaml but no matching handler exported`)
           }
         }
       } catch (err) {
@@ -89,8 +101,18 @@ async function checkModule(
     }
   }
 
-  // Check data separation (no data files in module code dir)
+  // Check data separation (no data files in module code dir).
+  // package.json / package-lock.json / tsconfig*.json are config files
+  // that legitimately live in the module dir for ESM dep resolution and
+  // TypeScript builds — whitelist them.
   const suspectExts = ['.db', '.sqlite', '.json']
+  const configWhitelist = new Set([
+    'package.json',
+    'package-lock.json',
+    'tsconfig.json',
+    'tsconfig.node.json',
+    'tsconfig.build.json',
+  ])
   const suspectDirs = ['output', 'data', 'state']
   for (const dir of suspectDirs) {
     const fullPath = path.join(mod.modulePath, dir)
@@ -101,6 +123,7 @@ async function checkModule(
   try {
     const entries = fs.readdirSync(mod.modulePath)
     for (const entry of entries) {
+      if (configWhitelist.has(entry)) continue
       if (suspectExts.some(ext => entry.endsWith(ext))) {
         issues.push(`Data file '${entry}' found in module code dir`)
       }
