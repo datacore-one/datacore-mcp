@@ -65,7 +65,7 @@ describe('SessionLogger', () => {
 
   it('endSession writes JSON to disk', () => {
     logger.startSession('sess-1')
-    logger.logToolCall('datacore.status', {}, { ok: true }, 10, true)
+    logger.logToolCall('datacore_status', {}, { ok: true }, 10, true)
     logger.endSession()
 
     const files = fs.readdirSync(tmpDir)
@@ -79,7 +79,7 @@ describe('SessionLogger', () => {
   })
 
   it('does nothing when no session started', () => {
-    logger.logToolCall('datacore.status', {}, {}, 10, true)
+    logger.logToolCall('datacore_status', {}, {}, 10, true)
     logger.endSession()
     const files = fs.readdirSync(tmpDir)
     expect(files).toHaveLength(0)

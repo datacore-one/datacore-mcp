@@ -1,6 +1,6 @@
 // test/server.test.ts
 import { describe, it, expect } from 'vitest'
-import { createServer, findClosestTools } from '../src/server.js'
+import { createServer, findClosestTools, canonicalToolName } from '../src/server.js'
 import { TOOLS } from '../src/tools/index.js'
 
 describe('MCP Server', () => {
@@ -11,13 +11,13 @@ describe('MCP Server', () => {
 
   it('registers all core tools', () => {
     const expectedTools = TOOLS.map(t => t.name)
-    expect(expectedTools).toContain('datacore.capture')
-    expect(expectedTools).toContain('datacore.search')
-    expect(expectedTools).toContain('datacore.ingest')
-    expect(expectedTools).toContain('datacore.status')
-    expect(expectedTools).toContain('datacore.modules.list')
-    expect(expectedTools).toContain('datacore.modules.info')
-    expect(expectedTools).toContain('datacore.modules.health')
+    expect(expectedTools).toContain('datacore_capture')
+    expect(expectedTools).toContain('datacore_search')
+    expect(expectedTools).toContain('datacore_ingest')
+    expect(expectedTools).toContain('datacore_status')
+    expect(expectedTools).toContain('datacore_modules_list')
+    expect(expectedTools).toContain('datacore_modules_info')
+    expect(expectedTools).toContain('datacore_modules_health')
   })
 
   it('does not include removed memory tools', () => {
@@ -37,9 +37,41 @@ describe('MCP Server', () => {
 
   it('all tools have valid schemas', () => {
     for (const tool of TOOLS) {
-      expect(tool.name).toMatch(/^datacore\./)
+      expect(tool.name).toMatch(/^datacore_/)
       expect(tool.description).toBeTruthy()
       expect(tool.inputSchema).toBeDefined()
+    }
+  })
+
+  // Regression: MCP clients (e.g. Claude Desktop) reject any tool name in
+  // tools/list that does not match this pattern — dots are not allowed.
+  // A single offending name blocks the whole connector. See bug report
+  // "Invalid Tool Name Breaks Claude Desktop" (2026-06).
+  it('every advertised tool name matches the MCP tool-name pattern', () => {
+    const VALID = /^[a-zA-Z0-9_-]{1,64}$/
+    for (const tool of TOOLS) {
+      expect(tool.name, `tool name "${tool.name}" must match ${VALID}`).toMatch(VALID)
+    }
+  })
+})
+
+describe('canonicalToolName (legacy dot-name back-compat)', () => {
+  it('maps legacy dot-namespaced names to the advertised underscore form', () => {
+    expect(canonicalToolName('datacore.capture')).toBe('datacore_capture')
+    expect(canonicalToolName('datacore.modules.list')).toBe('datacore_modules_list')
+    expect(canonicalToolName('datacore.gtd.add_task')).toBe('datacore_gtd_add_task')
+  })
+
+  it('leaves already-canonical underscore names unchanged', () => {
+    for (const tool of TOOLS) {
+      expect(canonicalToolName(tool.name)).toBe(tool.name)
+    }
+  })
+
+  it('routes every core tool from its legacy dotted alias', () => {
+    for (const tool of TOOLS) {
+      const legacy = tool.name.replace(/_/g, '.')
+      expect(canonicalToolName(legacy)).toBe(tool.name)
     }
   })
 })
@@ -49,7 +81,7 @@ describe('findClosestTools', () => {
 
   it('suggests closest tool for typos', () => {
     const result = findClosestTools('datacore.captur', names)
-    expect(result).toContain('datacore.capture')
+    expect(result).toContain('datacore_capture')
   })
 
   it('returns empty for completely unrelated input', () => {

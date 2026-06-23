@@ -1,14 +1,16 @@
 # @datacore-one/mcp
 
-Persistent memory for AI assistants.
+A plain-text second brain for AI assistants — journal, knowledge, and productivity tools over MCP.
 
 ## Why
 
-AI assistants are stateless. Every conversation starts from zero. Your AI forgets your preferences, your domain knowledge, your past decisions.
+AI assistants are great at reasoning but have nowhere to put what matters: your decisions, your notes, your day.
 
-Datacore changes that. It gives AI assistants persistent memory through **engrams** -- typed knowledge units that get injected into context when relevant. Your AI remembers your coding patterns, learns your domain, and builds on previous work.
+Datacore gives them a structured, plain-text second brain — capture journal entries and knowledge notes, search them back, get canonical date handling, and extend with modules (GTD, health, trading, and more).
 
-Not a RAG system. Not a vector database you have to manage. Just an MCP server that makes your AI smarter over time.
+Persistent **memory** — engrams, learning, and recall — is handled by Datacore's companion server, [PLUR](https://www.npmjs.com/package/@plur-ai/mcp) (`plur_*` tools). Run the two side by side: PLUR remembers, Datacore organizes.
+
+Not a RAG system. Not a vector database you have to manage. Just plain-text files and an MCP server.
 
 ## Quick Start
 
@@ -20,10 +22,10 @@ npm install -g @datacore-one/mcp
 
 Then connect from any MCP-compatible client. On first use, the server creates `~/Datacore/` with:
 
-- `engrams.yaml` — Your learned knowledge
 - `journal/` — Daily session logs
 - `knowledge/` — Ingested reference material
-- `packs/` — Engram packs (starter packs installed automatically)
+- `engrams.yaml` — Shared engram store, read and written by the companion PLUR MCP
+- `packs/` — Engram packs used by PLUR
 - `config.yaml` — Configuration (all fields optional)
 - `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.github/copilot-instructions.md` — Editor context files so any AI assistant immediately understands Datacore
 
@@ -60,7 +62,7 @@ Then allow Datacore tools in `.claude/settings.json` (or `.claude/settings.local
 }
 ```
 
-This auto-approves all Datacore MCP tools (session, learn, inject, etc.) so you don't get prompted on every call. The `enableAllProjectMcpServers` setting ensures the MCP server defined in `.mcp.json` is activated automatically.
+This auto-approves all Datacore MCP tools (capture, search, status, etc.) so you don't get prompted on every call. The `enableAllProjectMcpServers` setting ensures the MCP server defined in `.mcp.json` is activated automatically.
 
 ### Claude Desktop
 
@@ -94,58 +96,36 @@ Then point your MCP client to `http://127.0.0.1:3100/mcp`. See [HTTP Transport](
 
 | Mode | Storage | What You Get |
 |------|---------|--------------|
-| **Core** (`~/Datacore`) | Flat files | Engrams, journal, knowledge, packs |
+| **Core** (`~/Datacore`) | Flat files | Journal, knowledge, dates, packs |
 | **Full** (`~/Data`) | Datacore system | + modules, GTD, spaces, Datacortex |
 
 Mode is auto-detected. If you have a full [Datacore](https://github.com/datacore-one/datacore) installation at `~/Data`, it uses that. Otherwise it creates a lightweight `~/Datacore` directory.
 
 Override with environment variables: `DATACORE_PATH` (full) or `DATACORE_CORE_PATH` (core).
 
-## Tools (18 core + 3 full-mode)
+## Tools (5 core + 3 full-mode)
 
-### Session
-
-| Tool | Description |
-|------|-------------|
-| `datacore.session.start` | Begin a session — injects relevant engrams, shows today's journal |
-| `datacore.session.end` | End a session — captures journal summary and creates engrams |
+Datacore exposes productivity tools. **Memory — engrams, learning, recall, packs — is provided by the companion [PLUR MCP](https://www.npmjs.com/package/@plur-ai/mcp) server (`plur_*` tools), not by Datacore.**
 
 ### Core
 
 | Tool | Description |
 |------|-------------|
-| `datacore.capture` | Write a journal entry or knowledge note |
-| `datacore.learn` | Create an engram from a statement |
-| `datacore.inject` | Get relevant engrams for a task |
-| `datacore.recall` | Search all sources (engrams + journal + knowledge) |
-| `datacore.search` | Search journal and knowledge by keyword or semantic |
-| `datacore.ingest` | Ingest text as a knowledge note with engram extraction |
-| `datacore.status` | System status, counts, actionable recommendations |
-
-### Lifecycle
-
-| Tool | Description |
-|------|-------------|
-| `datacore.promote` | Activate candidate engrams |
-| `datacore.feedback` | Signal whether engrams were helpful (single or batch) |
-| `datacore.forget` | Retire an engram by ID or search |
-| `datacore.resolve` | Resolve engagement events (reconsolidations, discoveries, challenges) |
-
-### Packs
-
-| Tool | Description |
-|------|-------------|
-| `datacore.packs.discover` | Browse available engram packs |
-| `datacore.packs.install` | Install a pack |
-| `datacore.packs.export` | Export your engrams as a shareable pack |
+| `datacore_capture` | Write a journal entry or knowledge note |
+| `datacore_search` | Search journal and knowledge by keyword or semantic |
+| `datacore_ingest` | Ingest text as a knowledge note |
+| `datacore_status` | System status, counts, actionable recommendations |
+| `datacore_date` | Canonical date operations (today, day-of-week, validate, add/sub, parse, org-stamp) |
 
 ### Modules (full mode only)
 
 | Tool | Description |
 |------|-------------|
-| `datacore.modules.list` | List installed modules |
-| `datacore.modules.info` | Detailed info about a module |
-| `datacore.modules.health` | Health check for modules |
+| `datacore_modules_list` | List installed modules |
+| `datacore_modules_info` | Detailed info about a module |
+| `datacore_modules_health` | Health check for modules |
+
+Tool names use underscores to satisfy the MCP tool-name rule `^[a-zA-Z0-9_-]{1,64}$`. Legacy dot-namespaced names (`datacore.capture`) are still accepted as aliases for backward compatibility.
 
 ## Prompts
 
@@ -153,11 +133,10 @@ The server provides MCP prompts — workflow templates your AI can discover and 
 
 | Prompt | Description |
 |--------|-------------|
-| `datacore-session` | Start a working session with context injection |
-| `datacore-learn` | Record a learning through the engram lifecycle |
-| `datacore-guide` | Complete guide to all tools and workflows |
+| `datacore-capture` | Capture a journal entry or knowledge note |
+| `datacore-guide` | Complete guide to Datacore tools and workflows |
 
-Prompts are the primary way the AI understands Datacore. When your AI connects, it can list available prompts and immediately knows the session lifecycle, engram workflow, and how all tools relate.
+Prompts are the primary way the AI understands Datacore. When your AI connects, it can list available prompts and immediately knows how to capture, search, and organize — and that persistent memory lives in PLUR.
 
 ## Resources
 
@@ -165,62 +144,18 @@ Prompts are the primary way the AI understands Datacore. When your AI connects, 
 |----------|-------------|
 | `datacore://guide` | Agent workflow reference (markdown) |
 | `datacore://status` | System status summary (JSON) |
-| `datacore://engrams/active` | All active engrams (JSON) |
 | `datacore://journal/today` | Today's journal entry (markdown) |
 | `datacore://journal/{date}` | Journal entry by date |
-| `datacore://engrams/{id}` | Specific engram by ID |
 
-## How Engrams Work
+## Memory (via PLUR)
 
-Engrams are typed knowledge units with activation dynamics:
+Datacore organizes; **[PLUR](https://www.npmjs.com/package/@plur-ai/mcp) remembers.**
 
-```yaml
-id: ENG-2026-0221-001
-statement: "Always run tests before deploying"
-type: behavioral
-scope: global
-activation:
-  retrieval_strength: 0.8
-  storage_strength: 1.0
-```
+Persistent memory — engrams, learning, recall, feedback, and engram packs — lives in the companion PLUR MCP server (`plur_*` tools). Datacore scaffolds the shared, plain-text data directory (including `engrams.yaml` and `packs/`) that PLUR reads and writes, so both servers work against the same `~/Data` or `~/Datacore` store.
 
-When your AI starts a task, `datacore.inject` returns the most relevant engrams based on tags, scope, and activation strength. Engrams that prove useful get reinforced through `datacore.feedback`; unused ones naturally decay.
+Connect both in your MCP client and your AI gets a second brain (Datacore) plus persistent memory (PLUR). See the [PLUR docs](https://www.npmjs.com/package/@plur-ai/mcp) for the memory toolset and engram lifecycle.
 
-This creates a learning loop: your AI gets better at its job over time without you managing anything.
-
-## Pack System
-
-Engram packs are curated knowledge bundles you can install and share.
-
-```
-datacore.packs.discover  -- browse available packs
-datacore.packs.install   -- install a pack
-datacore.packs.export    -- export your engrams as a pack
-```
-
-Bundled starter packs are installed automatically on first run.
-
-## Engagement System
-
-Datacore includes an optional engagement layer that tracks your AI's learning progress through XP, tiers, and gameplay mechanics. Enable it in `config.yaml`:
-
-```yaml
-engagement:
-  enabled: true
-  inline_xp: false   # show XP gains inline in tool responses
-```
-
-When enabled, you earn XP for learning actions (creating engrams, giving feedback, reviewing contradictions). The system surfaces:
-
-- **Reconsolidations** — detects contradictions between engrams and prompts you to defend, revise, or retire
-- **Discoveries** — finds unexpected connections across knowledge domains
-- **Challenges** — weekly goals that reward consistent usage
-
-Progress is visible in `datacore.session.start` and `datacore.status`. Use `datacore.resolve` to act on reconsolidations, discoveries, and challenges.
-
-Tiers: Seed (0 XP) -> Cipher (100) -> Sage (500) -> Adept (1200) -> Visionary (2500) -> Oracle (5000).
-
-All engagement is gated behind `engagement.enabled` — when disabled, behavior is identical to v1.2.
+> **Upgrading from ≤1.5?** The engram engine (`learn`, `inject`, `recall`, `promote`, `feedback`, `forget`, packs, and the engagement/XP layer) moved out of Datacore into PLUR. Install [`@plur-ai/mcp`](https://www.npmjs.com/package/@plur-ai/mcp) alongside Datacore to keep that functionality.
 
 ## Configuration
 
@@ -243,21 +178,14 @@ Create `config.yaml` in your Datacore directory (or `.datacore/config.yaml` in f
 
 ```yaml
 version: 2
-engrams:
-  auto_promote: false        # true: learn creates active engrams immediately
-packs:
-  trusted_publishers: []     # publisher IDs whose packs are flagged for auto-install
 search:
   max_results: 20
   snippet_length: 500        # chars around match
 hints:
   enabled: true              # include _hints in tool responses for agent guidance
-engagement:
-  enabled: true              # enable XP, tiers, and gameplay mechanics
-  inline_xp: false           # show XP gains inline in tool responses
 ```
 
-All fields have defaults -- the file is optional.
+All fields have defaults -- the file is optional. Memory-related settings (engrams, packs, engagement) are configured in PLUR, not here.
 
 ## HTTP Transport
 
@@ -273,7 +201,7 @@ DATACORE_HTTP_PORT=8080 datacore-mcp --http
 
 ## Module System (Full Mode)
 
-Full Datacore installations extend the MCP server with module-provided tools. Modules are discovered from `.datacore/modules/` and space-scoped directories. Each module can register its own tools under the `datacore.[module].[tool]` namespace.
+Full Datacore installations extend the MCP server with module-provided tools. Modules are discovered from `.datacore/modules/` and space-scoped directories. Each module can register its own tools under the `datacore_[module]_[tool]` namespace.
 
 ## License
 

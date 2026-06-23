@@ -20,15 +20,15 @@ Usage:
 
 Tools:
   Productivity
-    datacore.capture         Capture a journal entry or knowledge note
-    datacore.search          Search journal and knowledge by keyword
-    datacore.ingest          Ingest text as knowledge note with engram extraction
-    datacore.status          System status, counts, update info
+    datacore_capture         Capture a journal entry or knowledge note
+    datacore_search          Search journal and knowledge by keyword
+    datacore_ingest          Ingest text as knowledge note with engram extraction
+    datacore_status          System status, counts, update info
 
   Modules (full mode)
-    datacore.modules.list    List installed modules
-    datacore.modules.info    Detailed info about a module
-    datacore.modules.health  Health check for modules
+    datacore_modules_list    List installed modules
+    datacore_modules_info    Detailed info about a module
+    datacore_modules_health  Health check for modules
 
   Note: Memory tools (learn, recall, feedback, forget, sessions) are now
   in PLUR MCP (@plur-ai/mcp). Install separately for persistent memory.

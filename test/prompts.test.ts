@@ -51,7 +51,7 @@ describe('MCP Prompts', () => {
       const result = await getHandler({ params: { name: 'datacore-capture', arguments: { type: 'journal' } } })
       expect(result.messages).toHaveLength(1)
       expect(result.messages[0].role).toBe('user')
-      expect(result.messages[0].content.text).toContain('datacore.capture')
+      expect(result.messages[0].content.text).toContain('datacore_capture')
     })
 
     it('returns guide prompt with tool reference', async () => {

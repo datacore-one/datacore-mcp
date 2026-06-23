@@ -6,7 +6,7 @@ import * as os from 'os'
 import { handleStatus } from '../../src/tools/status.js'
 import { loadConfig, resetConfigCache } from '../../src/config.js'
 
-describe('datacore.status', () => {
+describe('datacore_status', () => {
   let tmpDir: string
   let journalPath: string
   let knowledgePath: string
@@ -64,6 +64,6 @@ describe('datacore.status', () => {
       mode: 'core', basePath: tmpDir,
     })
     expect(result._hints).toBeDefined()
-    expect(result._hints?.related).toContain('datacore.search')
+    expect(result._hints?.related).toContain('datacore_search')
   })
 })

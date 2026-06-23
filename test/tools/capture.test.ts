@@ -5,7 +5,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { handleCapture, localDate } from '../../src/tools/capture.js'
 
-describe('datacore.capture', () => {
+describe('datacore_capture', () => {
   const tmpDir = path.join(os.tmpdir(), 'capture-test-' + Date.now())
 
   beforeEach(() => {

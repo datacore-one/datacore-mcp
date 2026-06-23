@@ -61,7 +61,7 @@ export function createServer(): Server {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     // Hide modules.* tools in core mode — they require a full installation
     const coreTools = storage.mode === 'core'
-      ? TOOLS.filter(t => !t.name.startsWith('datacore.modules.'))
+      ? TOOLS.filter(t => !t.name.startsWith('datacore_modules_'))
       : TOOLS
     return {
       tools: [
@@ -87,7 +87,7 @@ export function createServer(): Server {
       if (isFirstRun) {
         isFirstRun = false
         response.push({ type: 'text', text: JSON.stringify({
-          _welcome: `Welcome to Datacore MCP! Your data is stored at ${storage.basePath}. Try: datacore.capture to write a journal entry, datacore.search to find information, or datacore.status to see system info.`,
+          _welcome: `Welcome to Datacore MCP! Your data is stored at ${storage.basePath}. Try: datacore_capture to write a journal entry, datacore_search to find information, or datacore_status to see system info.`,
         }) })
       }
       response.push({ type: 'text', text: JSON.stringify(result, null, 2) })
@@ -105,6 +105,20 @@ export function createServer(): Server {
 }
 
 // --- Tool routing ---
+
+/**
+ * Canonicalize an incoming tool name to its advertised form.
+ *
+ * Tool names are advertised with underscores (e.g. `datacore_capture`) because
+ * MCP clients such as Claude Desktop validate every tool name in `tools/list`
+ * against `^[a-zA-Z0-9_-]{1,64}$` and hard-reject dots. Older callers (and our
+ * own pre-1.6 docs) used dot-namespaced names like `datacore.capture` or
+ * `datacore.gtd.add_task`; we still accept those by mapping dots to underscores.
+ * No advertised name contains a dot, so this transform is unambiguous.
+ */
+export function canonicalToolName(name: string): string {
+  return name.includes('.') ? name.replace(/\./g, '_') : name
+}
 
 async function routeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   const callStart = Date.now()
@@ -127,33 +141,35 @@ async function routeTool(name: string, args: Record<string, unknown>): Promise<u
 }
 
 async function routeToolInner(name: string, args: Record<string, unknown>): Promise<unknown> {
-  const coreTool = TOOLS.find(t => t.name === name)
+  // Accept legacy dot-namespaced names; route by the advertised underscore form.
+  const lookupName = canonicalToolName(name)
+  const coreTool = TOOLS.find(t => t.name === lookupName)
   if (coreTool) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Zod validates at runtime; union type too wide for TS
     const validated: any = coreTool.inputSchema.parse(args)
     let result: unknown
-    switch (name) {
-      case 'datacore.capture': result = await handleCapture(validated, storage); break
-      case 'datacore.search': result = await handleSearch(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }, datacortexBridge); break
-      case 'datacore.ingest': result = await handleIngest(validated, { knowledgePath: storage.knowledgePath }); break
-      case 'datacore.status': result = await handleStatus({ journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, packsPath: storage.packsPath, mode: storage.mode, basePath: storage.basePath }, updateAvailable); break
-      case 'datacore.date': result = await handleDate(validated, storage.basePath); break
-      case 'datacore.modules.list': result = await handleModulesList(validated, storage, discoveredModules); break
-      case 'datacore.modules.info': result = await handleModulesInfo(validated as { module: string }, storage, discoveredModules); break
-      case 'datacore.modules.health': result = await handleModulesHealth(validated as { module?: string }, storage, discoveredModules); break
+    switch (lookupName) {
+      case 'datacore_capture': result = await handleCapture(validated, storage); break
+      case 'datacore_search': result = await handleSearch(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }, datacortexBridge); break
+      case 'datacore_ingest': result = await handleIngest(validated, { knowledgePath: storage.knowledgePath }); break
+      case 'datacore_status': result = await handleStatus({ journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, packsPath: storage.packsPath, mode: storage.mode, basePath: storage.basePath }, updateAvailable); break
+      case 'datacore_date': result = await handleDate(validated, storage.basePath); break
+      case 'datacore_modules_list': result = await handleModulesList(validated, storage, discoveredModules); break
+      case 'datacore_modules_info': result = await handleModulesInfo(validated as { module: string }, storage, discoveredModules); break
+      case 'datacore_modules_health': result = await handleModulesHealth(validated as { module?: string }, storage, discoveredModules); break
       default: throw new Error(`Unknown core tool: ${name}`)
     }
     return result
   }
 
-  const modTool = moduleTools.find(t => t.fullName === name)
+  const modTool = moduleTools.find(t => t.fullName === lookupName)
   if (modTool) {
     const validated = modTool.definition.inputSchema.parse(args)
     return modTool.definition.handler(validated, modTool.context)
   }
 
   const allNames = [...TOOLS.map(t => t.name), ...moduleTools.map(t => t.fullName)]
-  const suggestions = findClosestTools(name, allNames)
+  const suggestions = findClosestTools(lookupName, allNames)
   const hint = suggestions.length > 0
     ? ` Did you mean: ${suggestions.join(', ')}?`
     : ''
@@ -261,11 +277,11 @@ export async function runHttp(): Promise<void> {
 const SERVER_INSTRUCTIONS = `Datacore is your productivity system — GTD task management, journal entries, knowledge files, and module management.
 
 Use Datacore for:
-- datacore.capture — write journal entries and knowledge notes
-- datacore.search — find information in journal and knowledge files
-- datacore.ingest — import content into your knowledge base
-- datacore.status — check system health
-- datacore.modules.* — manage installed modules
+- datacore_capture — write journal entries and knowledge notes
+- datacore_search — find information in journal and knowledge files
+- datacore_ingest — import content into your knowledge base
+- datacore_status — check system health
+- datacore_modules_* — manage installed modules
 
 For memory (engrams, learning, recall): use PLUR MCP tools (plur_session_start, plur_learn, plur_recall, etc.)`
 

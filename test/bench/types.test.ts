@@ -16,7 +16,7 @@ describe('bench types', () => {
       model: 'claude-sonnet-4-6',
       datacore_version: '1.5.2',
       tool_calls: [{
-        tool: 'datacore.status',
+        tool: 'datacore_status',
         timestamp: '2026-03-16T10:00:01Z',
         duration_ms: 50,
         input_size: 10,
@@ -33,6 +33,6 @@ describe('bench types', () => {
     expect(parsed.model).toBe('claude-sonnet-4-6')
     expect(parsed.duration_ms).toBe(0)
     expect(parsed.tool_calls).toHaveLength(1)
-    expect(parsed.tool_calls[0].tool).toBe('datacore.status')
+    expect(parsed.tool_calls[0].tool).toBe('datacore_status')
   })
 })

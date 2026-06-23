@@ -159,7 +159,7 @@ Persistent memory (engrams, sessions, feedback) is handled by **PLUR MCP** — a
 | Server | Tools | Purpose |
 |--------|-------|---------|
 | **PLUR MCP** | plur_session_start, plur_session_end, plur_learn, plur_recall_hybrid, plur_feedback, plur_forget | Persistent memory |
-| **Datacore MCP** | datacore.capture, datacore.search, datacore.ingest, datacore.status, datacore.modules.* | Productivity |
+| **Datacore MCP** | datacore_capture, datacore_search, datacore_ingest, datacore_status, datacore_modules_* | Productivity |
 
 ## Proactive Behavior
 
@@ -172,7 +172,7 @@ Use memory tools automatically — do not wait to be asked:
 ## Session Workflow
 
 1. **plur_session_start** — Call this first. Gets relevant engrams + today's journal.
-2. Work on the task. Use **plur_recall_hybrid** to search memory, **datacore.search** for files.
+2. Work on the task. Use **plur_recall_hybrid** to search memory, **datacore_search** for files.
 3. **plur_feedback** — Rate which injected engrams were helpful.
 4. **plur_session_end** — Capture summary + suggest new engrams.
 
@@ -193,13 +193,13 @@ Use memory tools automatically — do not wait to be asked:
 
 | Tool | Purpose |
 |------|---------|
-| datacore.capture | Write a journal entry or knowledge note. |
-| datacore.search | Search journal and knowledge files. |
-| datacore.ingest | Import text and extract engram suggestions. |
-| datacore.status | System health + recommendations. |
-| datacore.modules.list | List installed modules. |
-| datacore.modules.info | Detailed info about a module. |
-| datacore.modules.health | Health check for modules. |
+| datacore_capture | Write a journal entry or knowledge note. |
+| datacore_search | Search journal and knowledge files. |
+| datacore_ingest | Import text and extract engram suggestions. |
+| datacore_status | System health + recommendations. |
+| datacore_modules_list | List installed modules. |
+| datacore_modules_info | Detailed info about a module. |
+| datacore_modules_health | Health check for modules. |
 
 ## Engram Lifecycle
 
@@ -226,7 +226,7 @@ ${DATACORE_GUIDE}
 
 ## MCP Tools
 
-Productivity tools are prefixed with \`datacore.\` (e.g., \`datacore.capture\`).
+Productivity tools are prefixed with \`datacore_\` (e.g., \`datacore_capture\`).
 Memory tools use PLUR MCP (e.g., \`plur_session_start\`).
 Call \`plur_session_start\` at the beginning of every conversation.
 `
@@ -239,14 +239,14 @@ ${DATACORE_GUIDE}
 
 ## For AI Agents
 
-Productivity tools are in the \`datacore.\` namespace. Memory tools are in PLUR MCP.
+Productivity tools are in the \`datacore_\` namespace. Memory tools are in PLUR MCP.
 Start every session by calling \`plur_session_start\`.
 `
 
 const CONTEXT_CURSORRULES = `# Datacore
 
 This directory is managed by Datacore — productivity tools for AI assistants.
-Productivity tools are in the \`datacore.\` namespace. Memory tools are in PLUR MCP.
+Productivity tools are in the \`datacore_\` namespace. Memory tools are in PLUR MCP.
 
 ${DATACORE_GUIDE}`
 
@@ -258,7 +258,7 @@ ${DATACORE_GUIDE}
 
 ## MCP Integration
 
-Productivity tools are in the \`datacore.\` namespace. Memory tools are in PLUR MCP.
+Productivity tools are in the \`datacore_\` namespace. Memory tools are in PLUR MCP.
 Start every session by calling \`plur_session_start\`.
 `
 

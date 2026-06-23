@@ -163,7 +163,7 @@ describe('loadModuleTools', () => {
     const tools = await loadModuleTools(modules, makeStorage(tmpDir))
 
     expect(tools).toHaveLength(1)
-    expect(tools[0].fullName).toBe('datacore.gtd.inbox_count')
+    expect(tools[0].fullName).toBe('datacore_gtd_inbox_count')
     expect(tools[0].moduleName).toBe('gtd')
 
     // Verify the handler works
@@ -195,7 +195,7 @@ describe('loadModuleTools', () => {
     const tools = await loadModuleTools(modules, makeStorage(tmpDir))
 
     expect(tools).toHaveLength(1)
-    expect(tools[0].fullName).toBe('datacore.gtd.inbox_count')
+    expect(tools[0].fullName).toBe('datacore_gtd_inbox_count')
   })
 
   it('sets correct data path for space-scoped modules', async () => {

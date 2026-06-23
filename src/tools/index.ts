@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 export const TOOLS = [
   {
-    name: 'datacore.capture',
+    name: 'datacore_capture',
     description: 'Capture a journal entry or knowledge note. Call proactively to record important decisions, meeting outcomes, and significant events.',
     inputSchema: z.object({
       type: z.enum(['journal', 'knowledge']),
@@ -13,7 +13,7 @@ export const TOOLS = [
     }),
   },
   {
-    name: 'datacore.search',
+    name: 'datacore_search',
     description: 'Search journal entries and knowledge notes by keyword',
     inputSchema: z.object({
       query: z.string().describe('Search query'),
@@ -23,7 +23,7 @@ export const TOOLS = [
     }),
   },
   {
-    name: 'datacore.ingest',
+    name: 'datacore_ingest',
     description: 'Ingest text content as a knowledge note',
     inputSchema: z.object({
       content: z.string().describe('Content to ingest'),
@@ -32,12 +32,12 @@ export const TOOLS = [
     }),
   },
   {
-    name: 'datacore.status',
+    name: 'datacore_status',
     description: 'Show Datacore status: note counts, module health, update info',
     inputSchema: z.object({}),
   },
   {
-    name: 'datacore.date',
+    name: 'datacore_date',
     description: 'Canonical date operations — ALWAYS use this instead of typing dates from memory. LLMs hallucinate day-of-week names and anchor to training-era dates. Returns today\'s date, validates day-of-week, adds/subtracts days, parses relative expressions, and formats org-mode timestamps.',
     inputSchema: z.object({
       op: z.enum(['today', 'dow', 'validate', 'add', 'sub', 'diff', 'parse', 'org-stamp']).describe('Operation: today (current date+dow), dow (day-of-week for a date), validate (check date matches claimed dow), add/sub (N days from date), diff (days between two dates), parse (relative expression like "next monday"), org-stamp (<YYYY-MM-DD Day>)'),
@@ -50,19 +50,19 @@ export const TOOLS = [
     }),
   },
   {
-    name: 'datacore.modules.list',
+    name: 'datacore_modules_list',
     description: 'List installed modules with scope, version, and capability counts',
     inputSchema: z.object({}),
   },
   {
-    name: 'datacore.modules.info',
+    name: 'datacore_modules_info',
     description: 'Get detailed info about a specific module: manifest, tools, skills, agents',
     inputSchema: z.object({
       module: z.string().describe('Module name (e.g., "gtd", "slides", "crm")'),
     }),
   },
   {
-    name: 'datacore.modules.health',
+    name: 'datacore_modules_health',
     description: 'Check module health: missing files, env vars, data separation issues',
     inputSchema: z.object({
       module: z.string().optional().describe('Module name (omit for all modules)'),

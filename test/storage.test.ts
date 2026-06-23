@@ -116,7 +116,7 @@ describe('initCore', () => {
     const claude = fs.readFileSync(path.join(corePath, 'CLAUDE.md'), 'utf8')
     expect(claude).toContain('plur_session_start')
     expect(claude).toContain('Engram Lifecycle')
-    expect(claude).toContain('datacore.')
+    expect(claude).toContain('datacore_')
     expect(claude).toContain('PLUR MCP')
 
     const agents = fs.readFileSync(path.join(corePath, 'AGENTS.md'), 'utf8')

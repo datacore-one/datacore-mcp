@@ -29,14 +29,14 @@ const PROMPTS: PromptDef[] = [
         type: 'text',
         text: `Capture content to Datacore.${args.type ? ` Type: ${args.type}` : ''}
 
-Call datacore.capture to write a journal entry or knowledge note.
+Call datacore_capture to write a journal entry or knowledge note.
 
 Available tools:
-- datacore.capture — write journal entries and knowledge notes
-- datacore.search — find information in journal and knowledge files
-- datacore.ingest — import content into your knowledge base
-- datacore.status — check system health
-- datacore.modules.* — manage installed modules
+- datacore_capture — write journal entries and knowledge notes
+- datacore_search — find information in journal and knowledge files
+- datacore_ingest — import content into your knowledge base
+- datacore_status — check system health
+- datacore_modules_* — manage installed modules
 
 For memory (engrams, learning, recall): use PLUR MCP tools.`,
       },

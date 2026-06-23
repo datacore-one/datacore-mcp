@@ -44,7 +44,7 @@ export async function handleIngest(
     note_path: filePath,
     _hints: buildHints({
       next: 'Content saved as knowledge note. Use plur_ingest to also extract engrams from this content.',
-      related: ['datacore.search'],
+      related: ['datacore_search'],
     }),
   }
 }

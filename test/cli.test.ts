@@ -14,8 +14,8 @@ describe('CLI flags', () => {
   it('--help prints usage information', () => {
     const output = execSync(`npx tsx ${indexPath} --help`, { encoding: 'utf8', timeout: 10000 })
     expect(output).toContain('Datacore MCP Server')
-    expect(output).toContain('datacore.capture')
-    expect(output).toContain('datacore.search')
+    expect(output).toContain('datacore_capture')
+    expect(output).toContain('datacore_search')
     expect(output).toContain('PLUR MCP')
     expect(output).toContain('DATACORE_PATH')
   })

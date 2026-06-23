@@ -64,7 +64,7 @@ export interface DiscoveredModule {
 }
 
 export interface RegisteredModuleTool {
-  fullName: string          // datacore.[module].[tool]
+  fullName: string          // datacore_[module]_[tool]
   moduleName: string
   definition: ModuleToolDefinition
   context: ModuleToolContext
@@ -182,7 +182,7 @@ export async function loadModuleTools(
         if (!declared) continue
 
         tools.push({
-          fullName: `datacore.${mod.name}.${toolDef.name}`,
+          fullName: `datacore_${mod.name}_${toolDef.name}`,
           moduleName: mod.name,
           definition: toolDef,
           context,

@@ -29,7 +29,7 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
-describe('datacore.modules.info', () => {
+describe('datacore_modules_info', () => {
   it('returns error when module not found', async () => {
     const result = await handleModulesInfo({ module: 'nonexistent' }, makeStorage(tmpDir)) as Record<string, unknown>
     expect(result.error).toContain('not found')

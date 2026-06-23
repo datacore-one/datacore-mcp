@@ -37,7 +37,7 @@ export async function handleStatus(
   const { date: today } = localDate()
   const todayJournal = path.join(paths.journalPath, `${today}.md`)
   if (!fs.existsSync(todayJournal)) {
-    recommendations.push('No journal entry today. Use datacore.capture to start one.')
+    recommendations.push('No journal entry today. Use datacore_capture to start one.')
   }
 
   if (updateAvailable) {
@@ -53,8 +53,8 @@ export async function handleStatus(
     _hints: buildHints({
       next: recommendations.length > 0
         ? recommendations[0]
-        : 'System healthy. Use datacore.capture to write a journal entry.',
-      related: ['datacore.search', 'datacore.capture'],
+        : 'System healthy. Use datacore_capture to write a journal entry.',
+      related: ['datacore_search', 'datacore_capture'],
     }),
   }
 

@@ -5,7 +5,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { handleIngest } from '../../src/tools/ingest.js'
 
-describe('datacore.ingest', () => {
+describe('datacore_ingest', () => {
   let tmpDir: string
   let knowledgePath: string
 

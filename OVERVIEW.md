@@ -34,7 +34,7 @@ The server has two tool layers: **core tools** (hardcoded, always available) and
 ```
 .datacore/modules/gtd/module.yaml     ->  declares: inbox_count, add_task, ...
 .datacore/modules/gtd/tools/index.js  ->  exports: tool definitions with Zod schemas
-                                       ->  registered as: datacore.gtd.inbox_count
+                                       ->  registered as: datacore_gtd_inbox_count
 ```
 
 Dual-gating: tools must be declared in `module.yaml` AND exported from `tools/index.js`.
@@ -45,7 +45,7 @@ Dual-gating: tools must be declared in `module.yaml` AND exported from `tools/in
 |----------|-----------|
 | Plain JS for module tools (not TS) | Dynamic import compatibility; modules are external |
 | Zod for input schemas | Runtime validation + JSON Schema generation for MCP protocol |
-| Auto-namespacing (`datacore.module.tool`) | Prevents collisions, enables discovery |
+| Auto-namespacing (`datacore_module_tool`) | Prevents collisions, enables discovery |
 | Dual storage modes (full/standalone) | Works as installed module or standalone npm package |
 | Module tools as `tools/index.js` | Convention over configuration; single entry point per module |
 

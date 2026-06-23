@@ -6,7 +6,7 @@ import * as os from 'os'
 import { handleSearch } from '../../src/tools/search.js'
 import { loadConfig, resetConfigCache } from '../../src/config.js'
 
-describe('datacore.search', () => {
+describe('datacore_search', () => {
   const tmpDir = path.join(os.tmpdir(), 'search-test-' + Date.now())
   const journalPath = path.join(tmpDir, 'journal')
   const knowledgePath = path.join(tmpDir, 'knowledge')

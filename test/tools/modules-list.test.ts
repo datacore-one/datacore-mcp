@@ -29,7 +29,7 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
-describe('datacore.modules.list', () => {
+describe('datacore_modules_list', () => {
   it('returns empty list when no modules installed', async () => {
     const result = await handleModulesList({}, makeStorage(tmpDir)) as Record<string, unknown>
     expect(result.count).toBe(0)

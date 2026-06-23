@@ -132,14 +132,14 @@ describe('GTD Module Integration', () => {
     expect(tools.length).toBeGreaterThanOrEqual(2)
 
     const names = tools.map(t => t.fullName)
-    expect(names).toContain('datacore.gtd.inbox_count')
-    expect(names).toContain('datacore.gtd.add_task')
+    expect(names).toContain('datacore_gtd_inbox_count')
+    expect(names).toContain('datacore_gtd_add_task')
   })
 
   it('inbox_count returns correct count', async () => {
     const modules = discoverModules(makeStorage(tmpDir))
     const tools = await loadModuleTools(modules, makeStorage(tmpDir))
-    const inboxCount = tools.find(t => t.fullName === 'datacore.gtd.inbox_count')!
+    const inboxCount = tools.find(t => t.fullName === 'datacore_gtd_inbox_count')!
 
     const result = await inboxCount.definition.handler(
       { space: '0-personal' },
@@ -152,7 +152,7 @@ describe('GTD Module Integration', () => {
   it('add_task appends to inbox.org', async () => {
     const modules = discoverModules(makeStorage(tmpDir))
     const tools = await loadModuleTools(modules, makeStorage(tmpDir))
-    const addTask = tools.find(t => t.fullName === 'datacore.gtd.add_task')!
+    const addTask = tools.find(t => t.fullName === 'datacore_gtd_add_task')!
 
     const result = await addTask.definition.handler(
       { title: 'New test task', space: '0-personal' },

@@ -1,6 +1,6 @@
 {
   "name": "@datacore-one/mcp",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "Datacore MCP server — The Software of You",
   "type": "module",
   "bin": {
@@ -38,8 +38,9 @@
     "mcp",
     "datacore",
     "knowledge",
-    "learning",
-    "engrams"
+    "journal",
+    "second-brain",
+    "productivity"
   ],
   "license": "MIT",
   "author": "Fair Data Society",
