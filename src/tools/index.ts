@@ -68,4 +68,28 @@ export const TOOLS = [
       module: z.string().optional().describe('Module name (omit for all modules)'),
     }),
   },
+  {
+    name: 'datacore_command_list',
+    description: 'List available Datacore commands (slash-command workflows like /today, /tomorrow, /wrap-up). Returns name, description, and user-invocable flag for each command.',
+    inputSchema: z.object({}),
+  },
+  {
+    name: 'datacore_command_run',
+    description: 'Load a Datacore command\'s full instructions by name. Returns the complete workflow specification (markdown body after frontmatter) for the AI agent to execute. Use when the user invokes a slash command like /today, /tomorrow, /wrap-up, /continue, /process-inbox, /research, etc.',
+    inputSchema: z.object({
+      command: z.string().describe('Command name (e.g., "today", "tomorrow", "wrap-up")'),
+    }),
+  },
+  {
+    name: 'datacore_agent_list',
+    description: 'List available Datacore agents (prompt templates in .datacore/agents/). Returns name, description, and model for each agent.',
+    inputSchema: z.object({}),
+  },
+  {
+    name: 'datacore_agent_run',
+    description: 'Load a Datacore agent\'s full prompt by name. Returns the complete agent definition (markdown body after frontmatter) for the AI agent to use. Use when routing tasks to specialized agents (e.g., gtd-inbox-processor, ai-task-executor, research-orchestrator).',
+    inputSchema: z.object({
+      agent: z.string().describe('Agent name (e.g., "gtd-inbox-processor", "ai-task-executor")'),
+    }),
+  },
 ] as const

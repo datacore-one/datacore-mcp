@@ -24,6 +24,12 @@ import {
 import { handleModulesList } from './tools/modules-list.js'
 import { handleModulesInfo } from './tools/modules-info.js'
 import { handleModulesHealth } from './tools/modules-health.js'
+import {
+  handleCommandList,
+  handleCommandRun,
+  handleAgentList,
+  handleAgentRun,
+} from './tools/commands.js'
 import { logger } from './logger.js'
 import { registerResources } from './resources.js'
 import { registerPrompts } from './prompts.js'
@@ -59,9 +65,9 @@ export function createServer(): Server {
   }
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    // Hide modules.* tools in core mode — they require a full installation
+    // Hide modules.* and command/agent tools in core mode — they require a full installation
     const coreTools = storage.mode === 'core'
-      ? TOOLS.filter(t => !t.name.startsWith('datacore_modules_'))
+      ? TOOLS.filter(t => !t.name.startsWith('datacore_modules_') && !t.name.startsWith('datacore_command_') && !t.name.startsWith('datacore_agent_'))
       : TOOLS
     return {
       tools: [
@@ -157,6 +163,10 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
       case 'datacore_modules_list': result = await handleModulesList(validated, storage, discoveredModules); break
       case 'datacore_modules_info': result = await handleModulesInfo(validated as { module: string }, storage, discoveredModules); break
       case 'datacore_modules_health': result = await handleModulesHealth(validated as { module?: string }, storage, discoveredModules); break
+      case 'datacore_command_list': result = handleCommandList(validated, storage); break
+      case 'datacore_command_run': result = handleCommandRun(validated as { command: string }, storage); break
+      case 'datacore_agent_list': result = handleAgentList(validated, storage); break
+      case 'datacore_agent_run': result = handleAgentRun(validated as { agent: string }, storage); break
       default: throw new Error(`Unknown core tool: ${name}`)
     }
     return result
@@ -274,7 +284,7 @@ export async function runHttp(): Promise<void> {
 // Claude Code, Cursor, etc.) add this to the AI's system prompt so it uses
 // Datacore proactively without needing a separate CLAUDE.md or config file.
 
-const SERVER_INSTRUCTIONS = `Datacore is your productivity system — GTD task management, journal entries, knowledge files, and module management.
+const SERVER_INSTRUCTIONS = `Datacore is your productivity system — GTD task management, journal entries, knowledge files, module management, commands, and agents.
 
 Use Datacore for:
 - datacore_capture — write journal entries and knowledge notes
@@ -282,6 +292,16 @@ Use Datacore for:
 - datacore_ingest — import content into your knowledge base
 - datacore_status — check system health
 - datacore_modules_* — manage installed modules
+- datacore_command_list — list available slash commands (/today, /tomorrow, /wrap-up, etc.)
+- datacore_command_run — load a command's full instructions to execute
+- datacore_agent_list — list available agents (specialized AI prompt templates)
+- datacore_agent_run — load an agent's full prompt for task routing
+
+When the user types a slash command like /today, /tomorrow, /wrap-up, /continue, /process-inbox:
+1. Call datacore_command_run with the command name
+2. Read the returned instructions
+3. Execute each step using your available tools
+4. Write output to the specified location (usually the journal)
 
 For memory (engrams, learning, recall): use PLUR MCP tools (plur_session_start, plur_learn, plur_recall, etc.)`
 
