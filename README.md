@@ -133,7 +133,7 @@ The server provides MCP prompts — workflow templates your AI can discover and 
 
 | Prompt | Description |
 |--------|-------------|
-| `datacore-capture` | Capture a journal entry or knowledge note |
+| `datacore-capture-guide` | Capture a journal entry or knowledge note |
 | `datacore-guide` | Complete guide to Datacore tools and workflows |
 
 Prompts are the primary way the AI understands Datacore. When your AI connects, it can list available prompts and immediately knows how to capture, search, and organize — and that persistent memory lives in PLUR.

@@ -46,7 +46,7 @@
   "author": "Fair Data Society",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/datacore-one/mcp.git"
+    "url": "git+https://github.com/datacore-one/datacore-mcp.git"
   },
   "engines": {
     "node": ">=22"
