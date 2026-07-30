@@ -1,5 +1,7 @@
 # @datacore-one/mcp
 
+[![CI](https://github.com/datacore-one/datacore-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/datacore-one/datacore-mcp/actions/workflows/ci.yml)
+
 A plain-text second brain for AI assistants — journal, knowledge, and productivity tools over MCP.
 
 ## Why
