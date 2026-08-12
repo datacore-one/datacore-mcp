@@ -80,7 +80,8 @@ export function createServer(): Server {
         ...coreTools.map(t => ({
           name: t.name,
           description: t.description,
-          inputSchema: zodToJsonSchema(t.inputSchema),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          inputSchema: zodToJsonSchema(t.inputSchema as any),
         })),
         // Per-tool isolation. One module with an unusable schema must not be
         // able to delete every other tool from the server — which is exactly

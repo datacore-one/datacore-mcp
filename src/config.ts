@@ -8,34 +8,34 @@ export const ConfigSchema = z.object({
   version: z.number().default(2),
   engrams: z.object({
     auto_promote: z.boolean().default(true),
-  }).default({}),
+  }).default({ auto_promote: true }),
   packs: z.object({
     trusted_publishers: z.array(z.string()).default([]),
-  }).default({}),
+  }).default({ trusted_publishers: [] }),
   search: z.object({
     max_results: z.number().default(20),
     snippet_length: z.number().default(500),
-  }).default({}),
+  }).default({ max_results: 20, snippet_length: 500 }),
   hints: z.object({
     enabled: z.boolean().default(true),
-  }).default({}),
+  }).default({ enabled: true }),
   engagement: z.object({
     enabled: z.boolean().default(true),
     inline_xp: z.boolean().default(false),
-  }).default({}),
+  }).default({ enabled: true, inline_xp: false }),
   injection: z.object({
     directive_cap: z.number().default(10),
     consider_cap: z.number().default(5),
     spread_cap: z.number().default(3),
     spread_budget: z.number().default(480),
-  }).default({}),
+  }).default({ directive_cap: 10, consider_cap: 5, spread_cap: 3, spread_budget: 480 }),
   co_access: z.object({
     new_strength: z.number().default(0.1),
     increment: z.number().default(0.05),
     max_strength: z.number().default(0.95),
     decay_rate: z.number().default(0.05),
     prune_threshold: z.number().default(0.05),
-  }).default({}),
+  }).default({ new_strength: 0.1, increment: 0.05, max_strength: 0.95, decay_rate: 0.05, prune_threshold: 0.05 }),
   learning: z.object({
     decay_rate: z.number().default(0.05),
     abstraction_threshold: z.number().default(2),
@@ -43,7 +43,7 @@ export const ConfigSchema = z.object({
     auto_defer_learning_review: z.boolean().default(false),
     daily_review_max_items: z.number().default(5),
     onboarding_max_items: z.number().default(15),
-  }).default({}),
+  }).default({ decay_rate: 0.05, abstraction_threshold: 2, legacy_audit_rate: 3, auto_defer_learning_review: false, daily_review_max_items: 5, onboarding_max_items: 15 }),
 })
 
 export type DatacoreConfig = z.infer<typeof ConfigSchema>
