@@ -8,7 +8,8 @@ import type { StorageConfig } from './storage.js'
 export interface ModuleToolDefinition {
   name: string              // Without namespace prefix (e.g., 'inbox_count')
   description: string
-  inputSchema: z.ZodType
+  // Accepts both a Zod schema and a plain JSON Schema object — module authors may export either.
+  inputSchema: z.ZodType | Record<string, unknown>
   handler: (args: unknown, context: ModuleToolContext) => Promise<unknown>
 }
 
