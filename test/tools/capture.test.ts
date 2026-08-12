@@ -20,13 +20,13 @@ describe('datacore_capture', () => {
       { basePath: tmpDir, mode: 'core', journalPath: path.join(tmpDir, 'journal'), knowledgePath: path.join(tmpDir, 'knowledge') } as any,
     )
     expect(result.success).toBe(true)
-    const today = new Date().toISOString().split('T')[0]
+    const today = localDate().date
     const content = fs.readFileSync(path.join(tmpDir, 'journal', `${today}.md`), 'utf8')
     expect(content).toContain('productive meeting')
   })
 
   it('appends to existing journal entry', async () => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = localDate().date
     fs.writeFileSync(path.join(tmpDir, 'journal', `${today}.md`), '# Journal\n\nExisting.\n')
     await handleCapture(
       { type: 'journal', content: 'Second entry' },

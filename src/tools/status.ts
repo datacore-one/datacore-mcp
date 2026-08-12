@@ -4,6 +4,7 @@ import * as path from 'path'
 import { currentVersion } from '../version.js'
 import { localDate } from './capture.js'
 import { buildHints } from '../hints.js'
+import { checkLedgerHealth, type LedgerHealth } from '../ledger.js'
 
 interface StatusPaths {
   journalPath: string
@@ -19,6 +20,7 @@ interface StatusResult {
   journal_entries: number
   knowledge_notes: number
   update_available?: string
+  ledger?: LedgerHealth
   _recommendations?: string[]
   _hints?: ReturnType<typeof buildHints>
 }
@@ -44,11 +46,21 @@ export async function handleStatus(
     recommendations.push(`Update available: ${updateAvailable}. Run: npm update -g @datacore-one/mcp`)
   }
 
+  // The ledger is the only thing here that can make the installation's own
+  // history untrustworthy, so it leads the recommendations when it is broken.
+  const ledger = checkLedgerHealth(paths.basePath)
+  if (ledger.ok === false) {
+    recommendations.unshift(`LEDGER: ${ledger.detail}`)
+  } else if (ledger.ok === null && ledger.detail.includes('pre-v2')) {
+    recommendations.push(`LEDGER: ${ledger.detail}`)
+  }
+
   const statusResult: StatusResult = {
     version: currentVersion,
     mode: paths.mode,
     journal_entries: journalCount,
     knowledge_notes: knowledgeCount,
+    ledger,
     _recommendations: recommendations.length > 0 ? recommendations : undefined,
     _hints: buildHints({
       next: recommendations.length > 0

@@ -1,7 +1,7 @@
 {
   "name": "@datacore-one/mcp",
-  "version": "1.6.0",
-  "description": "Datacore MCP server — The Software of You",
+  "version": "2.0.0",
+  "description": "Datacore MCP server \u2014 The Software of You",
   "type": "module",
   "bin": {
     "datacore-mcp": "dist/index.js"
@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node dist/index.js",
-    "release": "npm test && npm version ${VERSION:-patch} && npm run build && npm publish --access public && npm install -g @datacore-one/mcp@$(node -p 'require(\"./package.json\").version')"
+    "release": "npm version ${VERSION:-patch} && npm publish --access public && npm install -g @datacore-one/mcp@$(node -p 'require(\"./package.json\").version')",
+    "verify": "bash scripts/prepublish-verify.sh",
+    "prepublishOnly": "bash scripts/prepublish-verify.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
