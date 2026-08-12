@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
+import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { detectStorage, initCore, type StorageConfig } from './storage.js'
 import { loadConfig } from './config.js'
@@ -35,6 +36,10 @@ import { registerResources } from './resources.js'
 import { registerPrompts } from './prompts.js'
 import { DatacortexBridge } from './datacortex.js'
 import { SessionLogger } from './bench/session-logger.js'
+
+function isZodSchema(schema: unknown): schema is z.ZodType {
+  return typeof schema === 'object' && schema !== null && '_def' in schema && typeof (schema as any)._def?.typeName === 'string'
+}
 
 let storage: StorageConfig
 let updateAvailable: string | null = null
@@ -76,11 +81,17 @@ export function createServer(): Server {
           description: t.description,
           inputSchema: zodToJsonSchema(t.inputSchema),
         })),
-        ...moduleTools.map(t => ({
-          name: t.fullName,
-          description: t.definition.description,
-          inputSchema: zodToJsonSchema(t.definition.inputSchema),
-        })),
+        ...moduleTools.flatMap(t => {
+          try {
+            const inputSchema = isZodSchema(t.definition.inputSchema)
+              ? zodToJsonSchema(t.definition.inputSchema)
+              : t.definition.inputSchema
+            return [{ name: t.fullName, description: t.definition.description, inputSchema }]
+          } catch (err) {
+            logger.warning(`Skipping module tool ${t.fullName}: failed to serialize inputSchema — ${err}`)
+            return []
+          }
+        }),
       ],
     }
   })
@@ -174,7 +185,9 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
 
   const modTool = moduleTools.find(t => t.fullName === lookupName)
   if (modTool) {
-    const validated = modTool.definition.inputSchema.parse(args)
+    const validated = isZodSchema(modTool.definition.inputSchema)
+      ? modTool.definition.inputSchema.parse(args)
+      : args
     return modTool.definition.handler(validated, modTool.context)
   }
 
