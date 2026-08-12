@@ -25,7 +25,7 @@ describe('MCP Prompts', () => {
     const result = await listHandler()
     expect(result.prompts).toHaveLength(2)
     const names = result.prompts.map((p: any) => p.name)
-    expect(names).toContain('datacore-capture')
+    expect(names).toContain('datacore-capture-guide')
     expect(names).toContain('datacore-guide')
   })
 
@@ -46,9 +46,9 @@ describe('MCP Prompts', () => {
   })
 
   describe('GetPrompt', () => {
-    it('returns capture prompt', async () => {
+    it('returns capture-guide prompt', async () => {
       const getHandler = [...handlers.values()][1]
-      const result = await getHandler({ params: { name: 'datacore-capture', arguments: { type: 'journal' } } })
+      const result = await getHandler({ params: { name: 'datacore-capture-guide', arguments: { type: 'journal' } } })
       expect(result.messages).toHaveLength(1)
       expect(result.messages[0].role).toBe('user')
       expect(result.messages[0].content.text).toContain('datacore_capture')

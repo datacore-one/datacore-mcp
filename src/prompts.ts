@@ -17,7 +17,7 @@ interface PromptDef {
 
 const PROMPTS: PromptDef[] = [
   {
-    name: 'datacore-capture',
+    name: 'datacore-capture-guide',
     title: 'Capture to Datacore',
     description: 'Write a journal entry or knowledge note to Datacore.',
     arguments: [
