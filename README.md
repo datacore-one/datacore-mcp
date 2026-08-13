@@ -2,13 +2,13 @@
 
 [![CI](https://github.com/datacore-one/datacore-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/datacore-one/datacore-mcp/actions/workflows/ci.yml)
 
-A plain-text second brain for AI assistants — journal, knowledge, and productivity tools over MCP.
+The knowledge and task orchestration layer for AI assistants — journals, GTD, Zettelkasten, and autonomous workflows over plain-text files via MCP.
 
 ## Why
 
-AI assistants are great at reasoning but have nowhere to put what matters: your decisions, your notes, your day.
+AI assistants are great at reasoning but have nowhere to put what matters: your decisions, your tasks, your notes.
 
-Datacore gives them a structured, plain-text second brain — capture journal entries and knowledge notes, search them back, get canonical date handling, and extend with modules (GTD, health, trading, and more).
+Datacore gives them a structured, plain-text home — capture journal entries, manage GTD task lists, build a Zettelkasten, and extend with modules for autonomous overnight workflows.
 
 Persistent **memory** — engrams, learning, and recall — is handled by Datacore's companion server, [PLUR](https://www.npmjs.com/package/@plur-ai/mcp) (`plur_*` tools). Run the two side by side: PLUR remembers, Datacore organizes.
 
@@ -155,7 +155,7 @@ Datacore organizes; **[PLUR](https://www.npmjs.com/package/@plur-ai/mcp) remembe
 
 Persistent memory — engrams, learning, recall, feedback, and engram packs — lives in the companion PLUR MCP server (`plur_*` tools). Datacore scaffolds the shared, plain-text data directory (including `engrams.yaml` and `packs/`) that PLUR reads and writes, so both servers work against the same `~/Data` or `~/Datacore` store.
 
-Connect both in your MCP client and your AI gets a second brain (Datacore) plus persistent memory (PLUR). See the [PLUR docs](https://www.npmjs.com/package/@plur-ai/mcp) for the memory toolset and engram lifecycle.
+Connect both in your MCP client and your AI gets structured knowledge and task management (Datacore) plus persistent memory (PLUR). See the [PLUR docs](https://www.npmjs.com/package/@plur-ai/mcp) for the memory toolset and engram lifecycle.
 
 > **Upgrading from ≤1.5?** The engram engine (`learn`, `inject`, `recall`, `promote`, `feedback`, `forget`, packs, and the engagement/XP layer) moved out of Datacore into PLUR. Install [`@plur-ai/mcp`](https://www.npmjs.com/package/@plur-ai/mcp) alongside Datacore to keep that functionality.
 
