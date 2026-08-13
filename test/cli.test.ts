@@ -7,16 +7,16 @@ const indexPath = path.join(__dirname, '..', 'src', 'index.ts')
 
 describe('CLI flags', () => {
   it('--version prints version string', () => {
-    const output = execSync(`npx tsx ${indexPath} --version`, { encoding: 'utf8', timeout: 10000 }).trim()
+    const output = execSync(`npx tsx ${indexPath} --version`, { encoding: 'utf8', timeout: 45000 }).trim()
     expect(output).toMatch(/^\d+\.\d+\.\d+/)
-  }, 20000)
+  }, 60000)
 
   it('--help prints usage information', () => {
-    const output = execSync(`npx tsx ${indexPath} --help`, { encoding: 'utf8', timeout: 10000 })
+    const output = execSync(`npx tsx ${indexPath} --help`, { encoding: 'utf8', timeout: 45000 })
     expect(output).toContain('Datacore MCP Server')
     expect(output).toContain('datacore_capture')
     expect(output).toContain('datacore_search')
     expect(output).toContain('PLUR MCP')
     expect(output).toContain('DATACORE_PATH')
-  }, 20000)
+  }, 60000)
 })

@@ -53,7 +53,32 @@ async function listTools(root: string): Promise<{ error?: string; names: string[
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let out = ''
-    p.stdout.on('data', (d) => (out += d))
+    let done = false
+    let timer: ReturnType<typeof setTimeout>
+    // Resolve as soon as the response ARRIVES, rather than sleeping a fixed 6s.
+    // The fixed wait held two spawned servers alive for the whole suite, which
+    // starved the other process-spawning tests (cli, http) into timing out —
+    // green alone, red together. A gate that fails on scheduling luck teaches
+    // people to rerun until it passes, which is worse than having no gate.
+    const finish = (v: { error?: string; names: string[] }) => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      p.kill()
+      resolve(v)
+    }
+    p.stdout.on('data', (d) => {
+      out += d
+      const line = out.split('\n').filter((l) => l.includes('"id":2')).pop()
+      if (!line) return
+      try {
+        const r = JSON.parse(line)
+        if (r.error) return finish({ error: r.error.message, names: [] })
+        finish({ names: r.result.tools.map((t: { name: string }) => t.name) })
+      } catch {
+        /* partial line — wait for the rest */
+      }
+    })
     p.stdin.write(
       JSON.stringify({
         jsonrpc: '2.0', id: 1, method: 'initialize',
@@ -61,14 +86,7 @@ async function listTools(root: string): Promise<{ error?: string; names: string[
       }) + '\n',
     )
     p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) + '\n')
-    setTimeout(() => {
-      p.kill()
-      const line = out.trim().split('\n').filter((l) => l.includes('"id":2')).pop()
-      if (!line) return resolve({ error: 'no response', names: [] })
-      const r = JSON.parse(line)
-      if (r.error) return resolve({ error: r.error.message, names: [] })
-      resolve({ names: r.result.tools.map((t: { name: string }) => t.name) })
-    }, 6000)
+    timer = setTimeout(() => finish({ error: 'no response', names: [] }), 20000)
   })
 }
 
