@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
+import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { toJsonSchema, validateArgs } from './schema.js'
 import { detectStorage, initCore, type StorageConfig } from './storage.js'
@@ -36,6 +37,10 @@ import { registerResources } from './resources.js'
 import { registerPrompts } from './prompts.js'
 import { DatacortexBridge } from './datacortex.js'
 import { SessionLogger } from './bench/session-logger.js'
+
+function isZodSchema(schema: unknown): schema is z.ZodType {
+  return typeof schema === 'object' && schema !== null && '_def' in schema && typeof (schema as any)._def?.typeName === 'string'
+}
 
 let storage: StorageConfig
 let updateAvailable: string | null = null
@@ -89,10 +94,12 @@ export function createServer(): Server {
               inputSchema: toJsonSchema(t.definition.inputSchema),
             }]
           } catch (err) {
-            // stderr, never stdout: stdout carries the JSON-RPC stream and
-            // anything written there corrupts the protocol itself.
-            console.error(
-              `[datacore] skipping tool '${t.fullName}': ` +
+            // logger, not console: it writes to stderr (stdout carries the
+            // JSON-RPC stream, and anything written there corrupts the
+            // protocol) AND sends an MCP logging notification, so the client
+            // is told why a tool is missing instead of silently not seeing it.
+            logger.warning(
+              `Skipping module tool ${t.fullName}: ` +
               `${err instanceof Error ? err.message : String(err)}`,
             )
             return []
