@@ -6,6 +6,7 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { zodToJsonSchema } from 'zod-to-json-schema'
+import { toJsonSchema, validateArgs } from './schema.js'
 import { detectStorage, initCore, type StorageConfig } from './storage.js'
 import { loadConfig } from './config.js'
 import { currentVersion, checkForUpdate } from './version.js'
@@ -76,11 +77,27 @@ export function createServer(): Server {
           description: t.description,
           inputSchema: zodToJsonSchema(t.inputSchema),
         })),
-        ...moduleTools.map(t => ({
-          name: t.fullName,
-          description: t.definition.description,
-          inputSchema: zodToJsonSchema(t.definition.inputSchema),
-        })),
+        // Per-tool isolation. One module with an unusable schema must not be
+        // able to delete every other tool from the server — which is exactly
+        // what happened on 2026-08-13, when a single module left the agent
+        // with no Datacore tools at all (datacore-mcp#15).
+        ...moduleTools.flatMap(t => {
+          try {
+            return [{
+              name: t.fullName,
+              description: t.definition.description,
+              inputSchema: toJsonSchema(t.definition.inputSchema),
+            }]
+          } catch (err) {
+            // stderr, never stdout: stdout carries the JSON-RPC stream and
+            // anything written there corrupts the protocol itself.
+            console.error(
+              `[datacore] skipping tool '${t.fullName}': ` +
+              `${err instanceof Error ? err.message : String(err)}`,
+            )
+            return []
+          }
+        }),
       ],
     }
   })
@@ -174,7 +191,7 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
 
   const modTool = moduleTools.find(t => t.fullName === lookupName)
   if (modTool) {
-    const validated = modTool.definition.inputSchema.parse(args)
+    const validated = validateArgs(modTool.definition.inputSchema, args)
     return modTool.definition.handler(validated, modTool.context)
   }
 

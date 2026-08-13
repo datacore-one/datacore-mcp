@@ -8,7 +8,10 @@ import type { StorageConfig } from './storage.js'
 export interface ModuleToolDefinition {
   name: string              // Without namespace prefix (e.g., 'inbox_count')
   description: string
-  inputSchema: z.ZodType
+  // Zod OR a plain JSON Schema object. Modules are third-party by design
+  // (DIP-0001), and requiring them to import the server's exact Zod version is
+  // a coupling that broke tool discovery outright — see src/schema.ts.
+  inputSchema: z.ZodType | object
   handler: (args: unknown, context: ModuleToolContext) => Promise<unknown>
 }
 
