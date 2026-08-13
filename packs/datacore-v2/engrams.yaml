@@ -1,0 +1,204 @@
+engrams:
+  - id: ENG-2026-0813-101
+    version: 1
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Merge, never rebase, when syncing Datacore repos — including `datacore update`, `git pull`, and any job that syncs a space"
+    rationale: >-
+      Rebase gives every local commit a NEW HASH. When the push afterwards fails
+      — offline, rejected, gated — that work exists under an identity no other
+      machine has ever seen, and the next watchdog pass treats it as junk to
+      reset past. On 2026-08-12 this stranded 23 commits in 2-datacore and 27 in
+      3-fds, including session wrap-ups eleven minutes old. A merge cannot do
+      this: local commits keep their hashes and stay reachable no matter how
+      many times the push fails. And for the per-writer event logs the sync
+      exists to move, a merge is a union of disjoint files — there is nothing to
+      conflict over.
+    domain: datacore.v2.git
+    tags: [git, sync, rebase, merge, dip-0046, ledger]
+    activation: { retrieval_strength: 0.9, storage_strength: 0.95, frequency: 0, last_accessed: "2026-08-13" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0813-102, type: semantic, strength: 0.9 }
+      - { target_type: engram, target: ENG-2026-0813-105, type: semantic, strength: 0.7 }
+    dual_coding:
+      example: "`git pull --no-rebase` or `ledger_transport.py converge --space <path>`. NEVER `git pull --rebase`, and never `--autostash` — a conflicting stash pop keeps the stash AND writes conflict markers into org files, which blocked briefing delivery for three days on 2026-08-03."
+    pack: datacore-v2
+
+  - id: ENG-2026-0813-102
+    version: 1
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: "A push range legitimately contains other actors' commits — you are accountable for what you AUTHORED, not what you are carrying"
+    rationale: >-
+      Once the fleet stopped rebasing, merges began carrying other actors'
+      commits into your history AS THEMSELVES, so foreign-authored commits
+      appear in a push range as a matter of course. Rebase used to hide this by
+      replaying everything under the pusher. On 2026-08-13 the ownership guard
+      blocked Miles's entire nightshift wrap-up because two commits authored by
+      Winston, touching winston.jsonl, sat in Miles's range — correctly
+      attributed events doing exactly what merge-based sync is for. Any check
+      that asks "who changed this file?" must filter by commit author, not by
+      who is pushing.
+    domain: datacore.v2.ledger
+    tags: [ledger, ownership, git, attribution, pre-push]
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-08-13" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0813-101, type: semantic, strength: 0.9 }
+      - { target_type: engram, target: ENG-2026-0813-103, type: semantic, strength: 0.6 }
+    dual_coding:
+      example: "Foreign commits in your range: normal, push it. Your OWN commit touching another actor's .jsonl: that is the real violation, stop and investigate."
+    pack: datacore-v2
+
+  - id: ENG-2026-0813-103
+    version: 1
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "SKIP_PRE_PUSH is for deliberately repairing a log by hand — never for making a blocked push go through"
+    rationale: >-
+      The ownership guard prints SKIP_PRE_PUSH=1 as its bypass, so a guard that
+      fires on ordinary syncing teaches every agent to reach for the bypass by
+      reflex — which disables the check for the one case it exists to catch:
+      one actor silently writing another's event log, where the merge succeeds
+      and the events are attributed to someone who never emitted them. If the
+      guard fires and you did not hand-edit a log, the guard is wrong. Report it
+      and get it fixed; do not bypass it.
+    domain: datacore.v2.ledger
+    tags: [ledger, ownership, bypass, discipline, pre-push]
+    activation: { retrieval_strength: 0.85, storage_strength: 0.9, frequency: 0, last_accessed: "2026-08-13" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0813-102, type: semantic, strength: 0.8 }
+    dual_coding:
+      example: "Blocked and you did not touch another actor's log by hand? Say so — do not add --no-verify."
+    pack: datacore-v2
+
+  - id: ENG-2026-0813-104
+    version: 1
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: "\"Could not tell\" is not a finding — keep unknown (null) distinct from broken (false) in every health check"
+    rationale: >-
+      A probe that renders "could not determine" as "fine" is how a machine sat
+      six weeks behind while every dashboard stayed green, and how Tris was
+      reported as having no MCP during 14 days of uptime. Rendering it as
+      "broken" is the opposite failure: it manufactures alarms out of probe
+      errors, and a pre-v2 installation that needs an update starts reporting an
+      incident it does not have. Both make real failures stop standing out.
+      datacore doctor and datacore_status therefore report ok:true / ok:false /
+      ok:null as three distinct states.
+    domain: datacore.v2.observability
+    tags: [health, doctor, status, probes, false-negatives]
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-08-13" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0813-106, type: semantic, strength: 0.7 }
+    dual_coding:
+      example: "`chains: ok` = verified. `chains: FAIL` = stop, folded state is untrustworthy. `chains: n/a` = the check could not run; find out why before believing either."
+    pack: datacore-v2
+
+  - id: ENG-2026-0813-105
+    version: 1
+    status: active
+    type: procedural
+    scope: global
+    visibility: public
+    statement: "Datacore's Python libraries require 3.10+ — `python3` on macOS is 3.9 and fails at import, not at runtime"
+    rationale: >-
+      The ledger modules use PEP-604 unions (`str | None`) in annotations
+      evaluated at import time, so 3.9 raises TypeError before executing a
+      single line. It does not degrade — it does not start. Selecting an
+      interpreter by NAME rather than by capability silently disabled the
+      transport on every Mac and, worse, made the failure look like "the
+      transport is unavailable", which is the condition that falls back to the
+      old behaviour. Resolve by asking each candidate its version; honour
+      DATACORE_PYTHON first.
+    domain: datacore.v2.runtime
+    tags: [python, macos, interpreter, ledger, dependencies]
+    activation: { retrieval_strength: 0.85, storage_strength: 0.9, frequency: 0, last_accessed: "2026-08-13" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0813-101, type: semantic, strength: 0.6 }
+    dual_coding:
+      example: "Set DATACORE_PYTHON to a 3.10+ interpreter (on macOS, the Homebrew one). Never assume bare `python3` qualifies."
+    pack: datacore-v2
+
+  - id: ENG-2026-0813-106
+    version: 1
+    status: active
+    type: architectural
+    scope: global
+    visibility: public
+    statement: "One failing component must never remove unrelated capability — isolate per item and report the skip"
+    rationale: >-
+      A single module exporting a plain JSON Schema made the MCP's tools/list
+      throw, and because the conversion ran unguarded inside the request
+      handler, ALL 69 core tools disappeared. The agent's symptom was "Datacore
+      has no tools at all" rather than "that one module is broken", and
+      diagnosis needed a hand-written JSON-RPC probe (datacore-mcp#15). The same
+      shape recurs everywhere: a loop over N things where one throw kills the
+      response. Convert each item independently, skip what cannot be served,
+      and say which and why — silence turns a degraded component into an
+      invisible one.
+    domain: datacore.v2.reliability
+    tags: [mcp, modules, isolation, blast-radius, error-handling]
+    activation: { retrieval_strength: 0.9, storage_strength: 0.9, frequency: 0, last_accessed: "2026-08-13" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0813-104, type: semantic, strength: 0.7 }
+    dual_coding:
+      example: "MCP module tools are converted one at a time; an unusable schema is logged via logger.warning (stderr + an MCP notification) and costs only its own tool."
+    pack: datacore-v2
+
+  - id: ENG-2026-0813-107
+    version: 1
+    status: active
+    type: procedural
+    scope: global
+    visibility: public
+    statement: "Check WHICH checkout a scheduled job runs from — a machine's detectors may run from a separate runner checkout, not the Datacore root"
+    rationale: >-
+      Six cron entries on the primary workstation run detectors and job_verify
+      from a separate runner checkout, deliberately, because the Datacore root
+      is a live shared working tree that agents edit underneath a running job.
+      Nothing was updating that checkout, so the workstation kept running stale
+      code while every fix reached the servers — a threshold already corrected
+      in the repo (max_age_hours 2 to 14) kept firing false alerts for hours
+      from the stale copy. Before concluding a fix did not work, confirm the
+      path the job actually executes.
+    domain: datacore.v2.operations
+    tags: [cron, deployment, drift, job-verify, detectors]
+    activation: { retrieval_strength: 0.8, storage_strength: 0.85, frequency: 0, last_accessed: "2026-08-13" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0813-104, type: semantic, strength: 0.5 }
+    dual_coding:
+      example: "`crontab -l` first. Grepping the repo can give the right answer about the wrong file."
+    pack: datacore-v2
+
+  - id: ENG-2026-0813-108
+    version: 1
+    status: active
+    type: behavioral
+    scope: global
+    visibility: public
+    statement: "Verify the built artifact and the running system, not the source — and gate publishing on it mechanically"
+    rationale: >-
+      A source-level test for `--rebase` passed while the SHIPPED bundle still
+      contained it, because the check was scoped to one file and missed
+      init.ts. Greping the built bundle caught it. Separately, the MCP had no
+      prepublishOnly at all, so `npm publish` could ship code that never
+      compiled and whose tests never ran — for the packages that update every
+      machine in the fleet. Checks that depend on someone remembering are not
+      checks. Both packages now gate publish on tests, build, artifact version
+      agreement, and a real protocol handshake.
+    domain: datacore.v2.release
+    tags: [release, publish, verification, ci, gate]
+    activation: { retrieval_strength: 0.85, storage_strength: 0.9, frequency: 0, last_accessed: "2026-08-13" }
+    associations:
+      - { target_type: engram, target: ENG-2026-0813-106, type: semantic, strength: 0.6 }
+    dual_coding:
+      example: "`npm run verify` before proposing a release. A gate that fails on scheduling luck is worse than no gate — it teaches people to rerun until green."
+    pack: datacore-v2
