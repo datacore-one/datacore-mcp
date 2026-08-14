@@ -6,7 +6,6 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
 import { toJsonSchema, validateArgs } from './schema.js'
 import { detectStorage, initCore, type StorageConfig } from './storage.js'
 import { loadConfig } from './config.js'
@@ -80,7 +79,8 @@ export function createServer(): Server {
         ...coreTools.map(t => ({
           name: t.name,
           description: t.description,
-          inputSchema: zodToJsonSchema(t.inputSchema),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          inputSchema: z.toJSONSchema(t.inputSchema),
         })),
         // Per-tool isolation. One module with an unusable schema must not be
         // able to delete every other tool from the server — which is exactly
