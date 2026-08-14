@@ -27,7 +27,7 @@
  *      module is unavailable"; it does not collapse.
  */
 
-import { zodToJsonSchema } from 'zod-to-json-schema'
+import { z } from 'zod'
 
 /** Zod schemas carry `_def` and a `parse` method; JSON Schema objects do not. */
 export function isZodSchema(s: unknown): boolean {
@@ -52,7 +52,7 @@ function looksLikeJsonSchema(s: unknown): boolean {
  * skip that one tool.
  */
 export function toJsonSchema(s: unknown): object {
-  if (isZodSchema(s)) return zodToJsonSchema(s as never) as object
+  if (isZodSchema(s)) return z.toJSONSchema(s as z.ZodType) as object
   if (looksLikeJsonSchema(s)) return s as object
   throw new Error(
     'inputSchema is neither a Zod schema nor a JSON Schema object ' +
