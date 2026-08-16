@@ -1,7 +1,7 @@
 // src/tools/modules-health.ts
 import * as fs from 'fs'
 import * as path from 'path'
-import { discoverModules, type DiscoveredModule } from '../modules.js'
+import { discoverModules, moduleLoadErrors, type DiscoveredModule } from '../modules.js'
 import type { StorageConfig } from '../storage.js'
 
 interface HealthCheck {
@@ -43,6 +43,12 @@ async function checkModule(
 ): Promise<HealthCheck> {
   const issues: string[] = []
   const manifest = mod.manifest as unknown as Record<string, unknown>
+
+  // Surface any tool load failure recorded at server startup
+  const startupLoadError = moduleLoadErrors.get(mod.name)
+  if (startupLoadError) {
+    issues.push(`Tool load failed at startup: ${startupLoadError}`)
+  }
 
   // Check required files
   if (!fs.existsSync(path.join(mod.modulePath, 'SKILL.md'))) {
@@ -132,7 +138,7 @@ async function checkModule(
 
   return {
     name: mod.name as string,
-    status: issues.length === 0 ? 'ok' : issues.some(i => i.startsWith('Missing required')) ? 'error' : 'warning',
+    status: issues.length === 0 ? 'ok' : issues.some(i => i.startsWith('Missing required') || i.startsWith('Tool load failed at startup')) ? 'error' : 'warning',
     issues,
   }
 }
