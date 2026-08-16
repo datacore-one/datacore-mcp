@@ -5,7 +5,7 @@ export default defineConfig({
   format: ['esm'],
   target: 'node22',
   clean: true,
-  dts: true,
+  dts: false,
   sourcemap: true,
   external: ['better-sqlite3'],
   banner: {
