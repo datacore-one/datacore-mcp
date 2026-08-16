@@ -1,7 +1,7 @@
 {
   "name": "@datacore-one/mcp",
   "version": "2.1.0",
-  "description": "Datacore MCP server \u2014 The Software of You",
+  "description": "Datacore MCP server — The Software of You",
   "type": "module",
   "bin": {
     "datacore-mcp": "dist/index.js"
@@ -28,7 +28,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.5.0",
+    "typescript": "^7.0.0",
     "vitest": "^4.1.9"
   },
   "files": [
@@ -53,6 +53,7 @@
     "node": ">=22"
   },
   "overrides": {
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "rollup-plugin-dts": "^6.5.1"
   }
 }
