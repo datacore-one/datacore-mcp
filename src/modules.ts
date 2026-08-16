@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as yaml from 'js-yaml'
 import { z } from 'zod'
+import { logger } from './logger.js'
 import type { StorageConfig } from './storage.js'
 
 export interface ModuleToolDefinition {
@@ -74,6 +75,13 @@ export interface RegisteredModuleTool {
   definition: ModuleToolDefinition
   context: ModuleToolContext
 }
+
+/**
+ * Tracks modules whose tools/index.js failed to load at server startup.
+ * Keyed by module name; value is the error message.
+ * Consumed by handleModulesHealth to surface startup failures.
+ */
+export const moduleLoadErrors: Map<string, string> = new Map()
 
 /**
  * Discover all installed modules by scanning module directories.
@@ -150,6 +158,7 @@ function scanModulesDir(
  * and have a valid tools/index.ts (compiled to .js) handler.
  *
  * Returns registered tools ready for MCP server integration.
+ * Load failures are logged as warnings and recorded in moduleLoadErrors.
  */
 export async function loadModuleTools(
   modules: DiscoveredModule[],
@@ -193,8 +202,10 @@ export async function loadModuleTools(
           context,
         })
       }
-    } catch {
-      // Failed to load module tools — skip this module
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      logger.warn(`Module '${mod.name}' tools failed to load at startup: ${message}`)
+      moduleLoadErrors.set(mod.name, message)
     }
   }
 
