@@ -4,6 +4,8 @@ import * as http from 'http'
 
 describe('HTTP transport', () => {
   it('health endpoint returns ok', async () => {
+    // Timeout is 30s: the dynamic import of server.ts (first time in this worker)
+    // compiles the full module graph and takes ~6s — more than the 5s default.
     // Start a minimal HTTP server using the same pattern
     const { createServer } = await import('../src/server.js')
     const server = createServer()
@@ -30,5 +32,5 @@ describe('HTTP transport', () => {
       httpServer.close()
       await server.close()
     }
-  })
+  }, 30000)
 })
