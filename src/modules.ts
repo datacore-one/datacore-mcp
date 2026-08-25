@@ -64,7 +64,9 @@ export interface ModuleManifest {
 export interface DiscoveredModule {
   name: string
   manifest: ModuleManifest
-  modulePath: string        // Absolute path to module code
+  modulePath: string        // Absolute path to module code (symlink path if symlinked)
+  realPath: string          // Physical path after resolving symlinks (equals modulePath when not a symlink)
+  isSymlink: boolean        // True when the entry in .datacore/modules/ is a symlink
   scope: 'global' | 'space'
   spaceName?: string
 }
@@ -125,8 +127,24 @@ function scanModulesDir(
     const entries = fs.readdirSync(modulesDir)
     for (const entry of entries) {
       const modulePath = path.join(modulesDir, entry)
-      const manifestPath = path.join(modulePath, 'module.yaml')
 
+      // Use lstatSync (not stat) so we detect symlinks rather than following them
+      let entryStat: fs.Stats
+      try {
+        entryStat = fs.lstatSync(modulePath)
+      } catch {
+        continue
+      }
+      const isSymlink = entryStat.isSymbolicLink()
+      let realPath: string
+      try {
+        realPath = isSymlink ? fs.realpathSync(modulePath) : modulePath
+      } catch {
+        // Dangling symlink — realpath fails; keep modulePath so health check can report it
+        realPath = modulePath
+      }
+
+      const manifestPath = path.join(realPath, 'module.yaml')
       if (!fs.existsSync(manifestPath)) continue
 
       try {
@@ -138,6 +156,8 @@ function scanModulesDir(
           name: manifest.name,
           manifest,
           modulePath,
+          realPath,
+          isSymlink,
           scope,
           spaceName,
         })

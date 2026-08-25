@@ -1,12 +1,19 @@
 {
   "name": "@datacore-one/mcp",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Datacore MCP server — The Software of You",
   "type": "module",
   "bin": {
     "datacore-mcp": "dist/index.js"
   },
   "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./runtime": {
+      "import": "./dist/runtime.js",
+      "require": "./dist/runtime.cjs"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

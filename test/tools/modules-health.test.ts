@@ -57,15 +57,17 @@ describe('datacore_modules_health', () => {
 
     const result = await handleModulesHealth({ module: 'bare' }, makeStorage(tmpDir)) as Record<string, unknown>
     expect(result.status).toBe('warning')
-    expect(result.issues).toContain('Missing SKILL.md (ecosystem entry point)')
-    expect(result.issues).toContain('Missing CLAUDE.base.md (AI context)')
+    const issues = result.issues as Array<{ code: string; message: string }>
+    expect(issues.some(i => i.code === 'MISSING_SKILL_MD')).toBe(true)
+    expect(issues.some(i => i.code === 'MISSING_CLAUDE_BASE_MD')).toBe(true)
   })
 
   it('warns about v1 manifest', async () => {
     writeModule('old', { name: 'old' }, { skillMd: true, claudeMd: true })
 
     const result = await handleModulesHealth({ module: 'old' }, makeStorage(tmpDir)) as Record<string, unknown>
-    expect((result.issues as string[]).some(i => i.includes('v1 format'))).toBe(true)
+    const issues = result.issues as Array<{ code: string; message: string }>
+    expect(issues.some(i => i.code === 'MANIFEST_VERSION_OUTDATED')).toBe(true)
   })
 
   it('warns about data files in module code dir', async () => {
@@ -74,8 +76,9 @@ describe('datacore_modules_health', () => {
     fs.writeFileSync(path.join(modDir, 'cache.json'), '{}')
 
     const result = await handleModulesHealth({ module: 'leaky' }, makeStorage(tmpDir)) as Record<string, unknown>
-    expect((result.issues as string[]).some(i => i.includes("'output/'"))).toBe(true)
-    expect((result.issues as string[]).some(i => i.includes("'cache.json'"))).toBe(true)
+    const issues = result.issues as Array<{ code: string; message: string }>
+    expect(issues.some(i => i.message.includes("'output/'"))).toBe(true)
+    expect(issues.some(i => i.message.includes("'cache.json'"))).toBe(true)
   })
 
   it('checks all modules when no name provided', async () => {
