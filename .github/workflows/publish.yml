@@ -1,0 +1,54 @@
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_gate:
+        description: 'Skip prepublishOnly gate (use only if MCP handshake fails in CI with no config)'
+        type: boolean
+        default: false
+        required: false
+
+jobs:
+  publish:
+    name: npm publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to npm
+        run: |
+          if [ "${{ inputs.skip_gate }}" = "true" ]; then
+            npm publish --access public --ignore-scripts
+          else
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify published version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Verifying npm shows @datacore-one/mcp@$VERSION ..."
+          for i in 1 2 3 4 5; do
+            LIVE=$(npm view @datacore-one/mcp version 2>/dev/null || true)
+            if [ "$LIVE" = "$VERSION" ]; then
+              echo "Published: @datacore-one/mcp@$LIVE"
+              exit 0
+            fi
+            echo "  Attempt $i: npm shows $LIVE, waiting 10s..."
+            sleep 10
+          done
+          echo "Warning: npm may still be propagating. Check: npm view @datacore-one/mcp version"
