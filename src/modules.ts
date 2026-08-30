@@ -224,7 +224,7 @@ export async function loadModuleTools(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      logger.warn(`Module '${mod.name}' tools failed to load at startup: ${message}`)
+      logger.warning(`Module '${mod.name}' tools failed to load at startup: ${message}`)
       moduleLoadErrors.set(mod.name, message)
     }
   }
