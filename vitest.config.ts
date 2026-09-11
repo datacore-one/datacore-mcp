@@ -7,7 +7,7 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/.worktrees/**'],
     // Run test FILES one at a time.
     //
-    // Several suites spawn real processes — `npx tsx` for the CLI flags, an
+    // Several suites spawn real processes — the built CLI, an
     // HTTP listener, and full MCP servers over stdio for module isolation.
     // Run in parallel they starve each other: every file passed alone and the
     // suite failed together, with timings that moved run to run. Raising the

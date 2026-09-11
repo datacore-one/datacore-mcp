@@ -203,7 +203,19 @@ DATACORE_HTTP_PORT=8080 datacore-mcp --http
 
 ## Module System (Full Mode)
 
-Full Datacore installations extend the MCP server with module-provided tools. Modules are discovered from `.datacore/modules/` and space-scoped directories. Each module can register its own tools under the `datacore_[module]_[tool]` namespace.
+Full Datacore installations discover module tools from `.datacore/modules/` and `[space]/.datacore/modules/`. Modules ship executable `tools/index.js`; discovery does not compile TypeScript.
+
+| Installation | Callable name | Default data directory |
+| --- | --- | --- |
+| Global `crm` | `datacore_crm_lookup` | `0-personal/.datacore/modules/crm/data/` |
+| Personal `crm` | `datacore_0-personal_crm_lookup` | `0-personal/.datacore/modules/crm/data/` |
+| Team `crm` | `datacore_1-team_crm_lookup` | `1-team/.datacore/modules/crm/data/` |
+
+Scope is part of each space module's callable identity. Calls never choose a data destination by discovery order or fall back to a module in another space. Third-party module `acme/crm` uses namespace `acme-crm`; its existing data directory uses the manifest name (`.../modules/acme/crm/data/`) and is not moved during registration. Module code directories may use the flattened name `acme-crm`.
+
+**Upgrade:** update callers of space-installed tools to the name advertised by `tools/list`. Their old unqualified names have no implicit alias, since such an alias could silently select a different space. Existing global names and data paths remain stable. Duplicate names (including collisions with core tools) and invalid or overlong identifiers are refused; unrelated tools remain available. Names must fit the 64-character MCP limit.
+
+The full-mode server exposes all installed scopes to its owner. `dataPath` is a routing convention: trusted module handlers execute in the same process and retain its filesystem privileges. Use independently restricted processes, credentials and storage roots where separate security contexts are required.
 
 ## License
 

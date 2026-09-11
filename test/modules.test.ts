@@ -227,6 +227,7 @@ describe('loadModuleTools', () => {
       path.join(tmpDir, '1-team', '.datacore', 'modules', 'crm', 'data')
     )
     expect(tools[0].context.spaceName).toBe('1-team')
+    expect(tools[0].fullName).toBe('datacore_1-team_crm_lookup')
   })
 })
 

@@ -69,7 +69,7 @@ export interface DiscoveredModule {
 }
 
 export interface RegisteredModuleTool {
-  fullName: string          // datacore_[module]_[tool]
+  fullName: string          // datacore_[space_]module_tool
   moduleName: string
   definition: ModuleToolDefinition
   context: ModuleToolContext
@@ -147,21 +147,30 @@ function scanModulesDir(
 /**
  * Load module tools from discovered modules.
  * Only loads tools from modules that declare provides.tools in module.yaml
- * and have a valid tools/index.ts (compiled to .js) handler.
+ * and ship tools/index.js (authored JavaScript or compiled TypeScript).
  *
  * Returns registered tools ready for MCP server integration.
  */
 export async function loadModuleTools(
   modules: DiscoveredModule[],
   storage: StorageConfig,
+  reservedNames: readonly string[] = [],
 ): Promise<RegisteredModuleTool[]> {
   const tools: RegisteredModuleTool[] = []
+  let invalidNames = 0
 
   for (const mod of modules) {
+    // Manifest names are path components as well as identifiers. Validate
+    // before constructing data paths or importing a module's handlers.
+    if (typeof mod.name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/.test(mod.name)
+      || (mod.scope === 'space' && (typeof mod.spaceName !== 'string' || !/^\d+-[a-zA-Z0-9_-]+$/.test(mod.spaceName)))) {
+      invalidNames++
+      continue
+    }
     const declaredTools = mod.manifest.provides?.tools
-    if (!declaredTools || declaredTools.length === 0) continue
+    if (!Array.isArray(declaredTools) || declaredTools.length === 0) continue
 
-    // Try to load the tools/index.ts (compiled to .js)
+    // JavaScript is the runtime artifact; no compiler runs during discovery.
     const toolsIndexPath = path.join(mod.modulePath, 'tools', 'index.js')
     if (!fs.existsSync(toolsIndexPath)) continue
 
@@ -183,11 +192,24 @@ export async function loadModuleTools(
 
       for (const toolDef of moduleTools) {
         // Only register tools declared in module.yaml
-        const declared = declaredTools.find(d => d.name === toolDef.name)
+        const declared = declaredTools.find(d => d?.name === toolDef?.name)
         if (!declared) continue
 
+        // Scope is part of callable identity, not just hidden handler state.
+        // A personal/team module must never shadow another data destination
+        // through the server's name-only dispatch. Global names stay stable.
+        const namespace = mod.name.replace('/', '-')
+        const prefix = mod.scope === 'space'
+          ? `datacore_${mod.spaceName}_${namespace}`
+          : `datacore_${namespace}`
+        const fullName = `${prefix}_${toolDef.name}`
+        if (typeof toolDef.name !== 'string' || !/^[a-z0-9_]+$/.test(toolDef.name)
+          || !/^[a-zA-Z0-9_-]{1,64}$/.test(fullName)) {
+          invalidNames++
+          continue
+        }
         tools.push({
-          fullName: `datacore_${mod.name}_${toolDef.name}`,
+          fullName,
           moduleName: mod.name,
           definition: toolDef,
           context,
@@ -198,7 +220,21 @@ export async function loadModuleTools(
     }
   }
 
-  return tools
+  if (invalidNames) {
+    console.error(`Datacore refused ${invalidNames} invalid module/tool identifier(s).`)
+  }
+
+  const counts = new Map<string, number>()
+  for (const name of reservedNames) counts.set(name, 1)
+  for (const tool of tools) counts.set(tool.fullName, (counts.get(tool.fullName) ?? 0) + 1)
+  // Malformed or duplicate manifests can still construct a collision. Refuse
+  // every colliding candidate, preserving unrelated tools and core discovery.
+  // Choosing the first/last would make installation order a routing decision.
+  const ambiguous = new Set([...counts].filter(([, count]) => count > 1).map(([name]) => name))
+  if (ambiguous.size) {
+    console.error(`Datacore refused ${ambiguous.size} ambiguous module tool name(s); reconcile duplicate manifests.`)
+  }
+  return tools.filter(tool => !ambiguous.has(tool.fullName))
 }
 
 /**

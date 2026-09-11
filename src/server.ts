@@ -247,7 +247,7 @@ async function initStorage(): Promise<void> {
   loadConfig(storage.basePath, storage.mode)
   if (storage.mode === 'full') {
     discoveredModules = discoverModules(storage)
-    moduleTools = await loadModuleTools(discoveredModules, storage)
+    moduleTools = await loadModuleTools(discoveredModules, storage, TOOLS.map(tool => tool.name))
     datacortexBridge = new DatacortexBridge(storage.basePath)
   }
 }
