@@ -1,5 +1,5 @@
 // test/storage.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
@@ -10,11 +10,12 @@ describe('detectStorage', () => {
 
   beforeEach(() => {
     fs.mkdirSync(tmpDir, { recursive: true })
-    delete process.env.DATACORE_PATH
-    delete process.env.DATACORE_CORE_PATH
+    vi.stubEnv('DATACORE_PATH', undefined)
+    vi.stubEnv('DATACORE_CORE_PATH', undefined)
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
@@ -41,7 +42,7 @@ describe('detectStorage', () => {
   })
 
   it('returns core mode for fresh install', () => {
-    process.env.HOME = tmpDir
+    vi.stubEnv('HOME', tmpDir)
     const result = detectStorage()
     expect(result.mode).toBe('core')
     expect(result.basePath).toBe(path.join(tmpDir, 'Datacore'))

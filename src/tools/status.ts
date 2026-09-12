@@ -43,7 +43,7 @@ export async function handleStatus(
   }
 
   if (updateAvailable) {
-    recommendations.push(`Update available: ${updateAvailable}. Run: npm update -g @datacore-one/mcp`)
+    recommendations.push(`Update available: ${updateAvailable}. Reconcile the declared runtime profile and verify it before switching versions`)
   }
 
   // The ledger is the only thing here that can make the installation's own
@@ -51,8 +51,8 @@ export async function handleStatus(
   const ledger = checkLedgerHealth(paths.basePath)
   if (ledger.ok === false) {
     recommendations.unshift(`LEDGER: ${ledger.detail}`)
-  } else if (ledger.ok === null && ledger.detail.includes('pre-v2')) {
-    recommendations.push(`LEDGER: ${ledger.detail}`)
+  } else if (ledger.ok === null) {
+    recommendations.unshift(`LEDGER: ${ledger.detail}`)
   }
 
   const statusResult: StatusResult = {

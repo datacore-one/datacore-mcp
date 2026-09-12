@@ -13,7 +13,7 @@ const transport = new StdioClientTransport({
   command: process.execPath,
   args: [fileURLToPath(new URL('../dist/index.js', import.meta.url))],
   env: { PATH: process.env.PATH ?? '', HOME: root,
-    DATACORE_PATH: root, DATACORE_ROOT: root, DATACORE_CORE_PATH: root },
+    DATACORE_PATH: root, DATACORE_ROOT: root },
   stderr: 'pipe',
 })
 let deadline

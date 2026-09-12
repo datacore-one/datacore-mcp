@@ -129,6 +129,36 @@ Datacore exposes productivity tools. **Memory — engrams, learning, recall, pac
 
 Tool names use underscores to satisfy the MCP tool-name rule `^[a-zA-Z0-9_-]{1,64}$`. Legacy dot-namespaced names (`datacore.capture`) are still accepted as aliases for backward compatibility.
 
+Managed installations select exactly one absolute `DATACORE_PATH` (existing
+full installation) or `DATACORE_CORE_PATH` (existing or new core store). Invalid
+explicit paths fail without choosing a different store. Leave both unset only
+when the documented HOME-based discovery is intended.
+
+Set absolute `DATACORE_LIB` and `DATACORE_PYTHON` to the qualified core library
+and interpreter. Failed explicit selections do not fall back to mutable data
+code or another Python. Ledger status uses the installed `ledger_health.py`
+version 1 protocol and canonical space discovery. Missing helpers, unreadable
+spaces, busy writers or invalid responses remain unverified and cannot yield
+“System healthy.” Older cores need reconciliation before ledger health can be
+established. Datacortex uses the same interpreter and the module next to that
+installed library, with bounded foreground process cleanup; deployment remains
+responsible for independent OS and credential isolation.
+
+Capture and ingestion create private notes with unique filenames and complete,
+non-replacing publication; existing note filenames and contents are preserved.
+Journal capture appends without rewriting earlier entries and syncs before
+acknowledging success. Local MCP writers and initializers coordinate through
+SQLite in `state/mcp-file-writes/coordination.db`; process death releases that
+lock. Keep this machine-local state out of synchronization. Initialization
+publishes complete defaults and packs without replacing existing user files.
+Aliased write directories and linked mutable journals are refused.
+
+These write checks are qualified on macOS/Linux filesystems. They do not provide
+cross-host locking or an exactly-once retry protocol. An interrupted request may
+have left a complete note or a partial new journal entry; inspect the destination
+before retrying a request whose durability could not be confirmed. Incomplete
+`.datacore-pending-*` artifacts are private and are not acknowledged notes.
+
 ## Prompts
 
 The server provides MCP prompts — workflow templates your AI can discover and use automatically:

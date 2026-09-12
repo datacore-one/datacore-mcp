@@ -181,7 +181,7 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
     switch (lookupName) {
       case 'datacore_capture': result = await handleCapture(validated, storage); break
       case 'datacore_search': result = await handleSearch(validated, { journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, spaces: storage.spaces }, datacortexBridge); break
-      case 'datacore_ingest': result = await handleIngest(validated, { knowledgePath: storage.knowledgePath }); break
+      case 'datacore_ingest': result = await handleIngest(validated, storage); break
       case 'datacore_status': result = await handleStatus({ journalPath: storage.journalPath, knowledgePath: storage.knowledgePath, packsPath: storage.packsPath, mode: storage.mode, basePath: storage.basePath }, updateAvailable); break
       case 'datacore_date': result = await handleDate(validated, storage.basePath); break
       case 'datacore_modules_list': result = await handleModulesList(validated, storage, discoveredModules); break

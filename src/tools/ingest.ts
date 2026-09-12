@@ -1,8 +1,8 @@
 // src/tools/ingest.ts
-import * as fs from 'fs'
 import * as path from 'path'
 import { validateContent, validateTitle } from '../limits.js'
 import { buildHints } from '../hints.js'
+import { createNote } from '../durable-files.js'
 
 interface IngestArgs {
   content: string
@@ -19,7 +19,7 @@ interface IngestResult {
 
 export async function handleIngest(
   args: IngestArgs,
-  paths: { knowledgePath: string },
+  paths: { knowledgePath: string; basePath?: string },
 ): Promise<IngestResult> {
   const contentError = validateContent(args.content)
   if (contentError) return { success: false, error: contentError }
@@ -28,16 +28,13 @@ export async function handleIngest(
     if (titleError) return { success: false, error: titleError }
   }
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const slug = (args.title ?? 'ingested').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50)
-  const fileName = `${timestamp}-${slug}.md`
-  const filePath = path.join(paths.knowledgePath, fileName)
-
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-
-  const frontmatter = `---\ntitle: "${args.title ?? 'Ingested Note'}"\ncreated: "${new Date().toISOString()}"\ntype: ingested\n---\n\n`
-  const tagLine = args.tags?.length ? `\n${args.tags.map(t => `#${t}`).join(' ')}\n` : ''
-  fs.writeFileSync(filePath, `${frontmatter}${args.content}\n${tagLine}`)
+  let filePath: string
+  try {
+    filePath = createNote(paths.basePath ?? path.dirname(paths.knowledgePath), paths.knowledgePath,
+      args.content, args.title ?? 'Ingested Note', args.tags, true)
+  } catch {
+    return { success: false, error: 'Ingestion could not be durably confirmed. Inspect the destination before retrying.' }
+  }
 
   return {
     success: true,

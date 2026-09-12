@@ -2,6 +2,9 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
+import { fileURLToPath } from 'node:url'
+import { randomUUID } from 'node:crypto'
+import { createText, directoryWithin, serialized, syncDirectory } from './durable-files.js'
 
 export type StorageMode = 'full' | 'core'
 
@@ -28,15 +31,25 @@ export interface StorageConfig {
 }
 
 export function detectStorage(): StorageConfig {
-  // 1. Explicit DATACORE_PATH (full installation)
+  // Explicit identity is exclusive. A typo must never select another store.
   const dcPath = process.env.DATACORE_PATH
-  if (dcPath && fs.existsSync(path.join(dcPath, '.datacore'))) {
+  const corePath = process.env.DATACORE_CORE_PATH
+  if (dcPath !== undefined && corePath !== undefined) {
+    throw new Error('Select one explicit Datacore storage mode')
+  }
+  function directory(value: string): boolean {
+    try { return fs.statSync(value).isDirectory() } catch { return false }
+  }
+  if (dcPath !== undefined) {
+    if (!dcPath || !path.isAbsolute(dcPath) || !directory(dcPath) || !directory(path.join(dcPath, '.datacore'))) {
+      throw new Error('DATACORE_PATH is not an available full installation')
+    }
     return fullConfig(dcPath)
   }
-
-  // 2. Explicit core path (env var overrides auto-detection)
-  const corePath = process.env.DATACORE_CORE_PATH
-  if (corePath && fs.existsSync(corePath)) {
+  if (corePath !== undefined) {
+    if (!corePath || !path.isAbsolute(corePath) || (fs.existsSync(corePath) && !directory(corePath))) {
+      throw new Error('DATACORE_CORE_PATH is not an available core installation')
+    }
     return coreConfig(corePath)
   }
 
@@ -109,23 +122,18 @@ function coreConfig(basePath: string): StorageConfig {
 }
 
 export function initCore(basePath: string): { isFirstRun: boolean } {
-  const isFirstRun = !fs.existsSync(path.join(basePath, 'engrams.yaml'))
   for (const dir of ['journal', 'knowledge', 'packs', 'exchange/inbox', 'exchange/outbox', 'archive', 'state']) {
-    const dirPath = path.join(basePath, dir)
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true })
-    }
+    directoryWithin(basePath, path.join(basePath, dir))
   }
+  return serialized(basePath, path.join(basePath, 'state'), () => initializeCoreFiles(basePath))
+}
 
+function initializeCoreFiles(basePath: string): { isFirstRun: boolean } {
   const engramsPath = path.join(basePath, 'engrams.yaml')
-  if (!fs.existsSync(engramsPath)) {
-    fs.writeFileSync(engramsPath, 'engrams: []\n')
-  }
+  const isFirstRun = createText(basePath, engramsPath, 'engrams: []\n')
 
   const configPath = path.join(basePath, 'config.yaml')
-  if (!fs.existsSync(configPath)) {
-    fs.writeFileSync(configPath, '# Datacore MCP configuration\nversion: 2\n# engrams:\n#   auto_promote: true  # engrams are active immediately (set false for manual review)\n# packs:\n#   trusted_publishers: []\n# search:\n#   max_results: 20\n#   snippet_length: 500\n# hints:\n#   enabled: true\n')
-  }
+  createText(basePath, configPath, '# Datacore MCP configuration\nversion: 2\n# Memory lifecycle and review policy are configured in PLUR.\n# packs:\n#   trusted_publishers: []\n# search:\n#   max_results: 20\n#   snippet_length: 500\n# hints:\n#   enabled: true\n')
 
   generateContextFiles(basePath)
   copyStarterPacks(basePath)
@@ -143,10 +151,7 @@ function generateContextFiles(basePath: string): void {
   ]
   for (const { rel, content } of files) {
     const filePath = path.join(basePath, rel)
-    if (!fs.existsSync(filePath)) {
-      fs.mkdirSync(path.dirname(filePath), { recursive: true })
-      fs.writeFileSync(filePath, content)
-    }
+    createText(basePath, filePath, content)
   }
 }
 
@@ -263,9 +268,9 @@ Start every session by calling \`plur_session_start\`.
 `
 
 function copyStarterPacks(basePath: string): void {
-  const packsDir = path.join(basePath, 'packs')
+  const packsDir = directoryWithin(basePath, path.join(basePath, 'packs'))
   const bundledPacksDir = path.join(
-    path.dirname(new URL(import.meta.url).pathname),
+    path.dirname(fileURLToPath(import.meta.url)),
     '..', 'packs'
   )
 
@@ -274,8 +279,30 @@ function copyStarterPacks(basePath: string): void {
   for (const entry of fs.readdirSync(bundledPacksDir)) {
     const src = path.join(bundledPacksDir, entry)
     const dest = path.join(packsDir, entry)
-    if (!fs.existsSync(dest) && fs.statSync(src).isDirectory()) {
-      fs.cpSync(src, dest, { recursive: true })
+    if (fs.existsSync(dest) || !fs.lstatSync(src).isDirectory()) continue
+    const temporary = path.join(packsDir, `.datacore-pending-${randomUUID()}`)
+    const copy = (source: string, target: string) => {
+      fs.mkdirSync(target, { mode: 0o700 })
+      for (const child of fs.readdirSync(source)) {
+        const original = path.join(source, child), destination = path.join(target, child)
+        const info = fs.lstatSync(original)
+        if (info.isDirectory()) copy(original, destination)
+        else if (info.isFile()) {
+          fs.copyFileSync(original, destination, fs.constants.COPYFILE_EXCL)
+          fs.chmodSync(destination, 0o600)
+          const fd = fs.openSync(destination, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW)
+          try { fs.fsyncSync(fd) } finally { fs.closeSync(fd) }
+        } else throw new Error('bundled pack contains an unsupported file')
+      }
+      syncDirectory(target)
     }
+    try {
+      copy(src, temporary)
+      try { fs.renameSync(temporary, dest) }
+      catch (error) {
+        if (!['EEXIST', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error
+      }
+      syncDirectory(packsDir)
+    } finally { fs.rmSync(temporary, { recursive: true, force: true }) }
   }
 }
