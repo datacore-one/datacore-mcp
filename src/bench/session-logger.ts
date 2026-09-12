@@ -1,5 +1,6 @@
-import * as fs from 'fs'
 import * as path from 'path'
+import { randomUUID } from 'node:crypto'
+import { createText } from '../durable-files.js'
 import { SessionLog, ToolCallLog, FeedbackLog, SCHEMA_VERSION } from './types.js'
 
 export class SessionLogger {
@@ -15,6 +16,7 @@ export class SessionLogger {
   }
 
   startSession(sessionId: string): void {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(sessionId)) throw new Error('Invalid benchmark session identifier')
     this.log = {
       schema_version: SCHEMA_VERSION,
       session_id: sessionId,
@@ -47,7 +49,7 @@ export class SessionLogger {
       output_size: Math.ceil(JSON.stringify(result ?? {}).length / 4),  // estimated tokens (chars/4)
       success
     }
-    if (error) entry.error = error
+    if (error) entry.error = 'tool-failed'
     this.log.tool_calls.push(entry)
   }
 
@@ -75,9 +77,10 @@ export class SessionLogger {
     if (!this.log) return
     this.log.ended_at = new Date().toISOString()
     this.log.duration_ms = new Date(this.log.ended_at).getTime() - new Date(this.log.started_at).getTime()
-    fs.mkdirSync(this.logDir, { recursive: true })
-    const filename = `${this.log.session_id}_${this.log.started_at.replace(/[:.]/g, '-')}.json`
-    fs.writeFileSync(path.join(this.logDir, filename), JSON.stringify(this.log, null, 2))
+    const filename = `${this.log.session_id}_${this.log.started_at.replace(/[:.]/g, '-')}_${randomUUID()}.json`
+    if (!createText(this.logDir, path.join(this.logDir, filename), JSON.stringify(this.log, null, 2))) {
+      throw new Error('Benchmark publication could not be confirmed')
+    }
     this.log = null
   }
 }

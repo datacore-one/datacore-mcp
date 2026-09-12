@@ -24,16 +24,16 @@ bad()  { printf '  \033[31m✗ %s\033[0m\n' "$1"; FAIL=1; }
 VERSION=$(node -p "require('./package.json').version")
 printf '\033[1mPre-publish verification — @datacore-one/mcp %s\033[0m\n' "$VERSION"
 
+step "Build"
+if npm run build >"$LOG_DIR/build.log" 2>&1; then ok "dist/ built"
+else bad "build failed:"; tail -15 "$LOG_DIR/build.log"; fi
+
 step "Tests"
 if npm test >"$LOG_DIR/test.log" 2>&1; then
   ok "$(grep -Eo 'Tests +[0-9]+ passed' "$LOG_DIR/test.log" | tail -1)"
 else
-  bad "tests failed:"; grep -E 'FAIL|AssertionError' "$LOG_DIR/test.log" | head -15
+  bad "tests failed:"; tail -100 "$LOG_DIR/test.log"
 fi
-
-step "Build"
-if npm run build >"$LOG_DIR/build.log" 2>&1; then ok "dist/ built"
-else bad "build failed:"; tail -15 "$LOG_DIR/build.log"; fi
 
 step "Built artifact"
 # Exercise the ARTIFACT. The deployed tree on servers has dist/ and no

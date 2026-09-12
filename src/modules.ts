@@ -3,6 +3,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as yaml from 'js-yaml'
 import { z } from 'zod'
+import { logger } from './logger.js'
+import { toJsonSchema } from './schema.js'
 import type { StorageConfig } from './storage.js'
 
 export interface ModuleToolDefinition {
@@ -63,7 +65,9 @@ export interface ModuleManifest {
 export interface DiscoveredModule {
   name: string
   manifest: ModuleManifest
-  modulePath: string        // Absolute path to module code
+  modulePath: string        // Absolute path to module code (symlink path if symlinked)
+  realPath: string          // Physical path after resolving symlinks (equals modulePath when not a symlink)
+  isSymlink: boolean        // True when the entry in .datacore/modules/ is a symlink
   scope: 'global' | 'space'
   spaceName?: string
 }
@@ -73,6 +77,17 @@ export interface RegisteredModuleTool {
   moduleName: string
   definition: ModuleToolDefinition
   context: ModuleToolContext
+}
+
+/**
+ * Tracks modules whose tools/index.js failed to load at server startup.
+ * Keyed by installed module context; values contain categories, never exceptions.
+ * Consumed by handleModulesHealth to surface startup failures.
+ */
+export const moduleLoadErrors: Map<string, string> = new Map()
+export const moduleRegisteredTools: Map<string, Set<string>> = new Map()
+export function moduleLoadKey(mod: Pick<DiscoveredModule, 'scope' | 'spaceName' | 'modulePath'>): string {
+  return JSON.stringify([mod.scope, mod.spaceName ?? '', path.resolve(mod.modulePath)])
 }
 
 /**
@@ -117,8 +132,24 @@ function scanModulesDir(
     const entries = fs.readdirSync(modulesDir)
     for (const entry of entries) {
       const modulePath = path.join(modulesDir, entry)
-      const manifestPath = path.join(modulePath, 'module.yaml')
 
+      // Use lstatSync (not stat) so we detect symlinks rather than following them
+      let entryStat: fs.Stats
+      try {
+        entryStat = fs.lstatSync(modulePath)
+      } catch {
+        continue
+      }
+      const isSymlink = entryStat.isSymbolicLink()
+      let realPath: string
+      try {
+        realPath = isSymlink ? fs.realpathSync(modulePath) : modulePath
+      } catch {
+        // Dangling symlink — realpath fails; keep modulePath so health check can report it
+        realPath = modulePath
+      }
+
+      const manifestPath = path.join(realPath, 'module.yaml')
       if (!fs.existsSync(manifestPath)) continue
 
       try {
@@ -130,6 +161,8 @@ function scanModulesDir(
           name: manifest.name,
           manifest,
           modulePath,
+          realPath,
+          isSymlink,
           scope,
           spaceName,
         })
@@ -150,6 +183,7 @@ function scanModulesDir(
  * and ship tools/index.js (authored JavaScript or compiled TypeScript).
  *
  * Returns registered tools ready for MCP server integration.
+ * Load failures are logged as warnings and recorded in moduleLoadErrors.
  */
 export async function loadModuleTools(
   modules: DiscoveredModule[],
@@ -157,14 +191,20 @@ export async function loadModuleTools(
   reservedNames: readonly string[] = [],
 ): Promise<RegisteredModuleTool[]> {
   const tools: RegisteredModuleTool[] = []
+  moduleLoadErrors.clear()
+  moduleRegisteredTools.clear()
+  const registrationKeys = new Map<RegisteredModuleTool, string>()
   let invalidNames = 0
 
   for (const mod of modules) {
+    const key = moduleLoadKey(mod)
+    moduleRegisteredTools.set(key, new Set())
     // Manifest names are path components as well as identifiers. Validate
     // before constructing data paths or importing a module's handlers.
     if (typeof mod.name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/.test(mod.name)
       || (mod.scope === 'space' && (typeof mod.spaceName !== 'string' || !/^\d+-[a-zA-Z0-9_-]+$/.test(mod.spaceName)))) {
       invalidNames++
+      moduleLoadErrors.set(key, 'invalid-identifier')
       continue
     }
     const declaredTools = mod.manifest.provides?.tools
@@ -194,6 +234,13 @@ export async function loadModuleTools(
         // Only register tools declared in module.yaml
         const declared = declaredTools.find(d => d?.name === toolDef?.name)
         if (!declared) continue
+        try {
+          toJsonSchema(toolDef.inputSchema)
+          if (typeof toolDef.handler !== 'function') throw new Error('invalid handler')
+        } catch {
+          moduleLoadErrors.set(key, 'invalid-tool-definition')
+          continue
+        }
 
         // Scope is part of callable identity, not just hidden handler state.
         // A personal/team module must never shadow another data destination
@@ -208,15 +255,21 @@ export async function loadModuleTools(
           invalidNames++
           continue
         }
-        tools.push({
+        const registered = {
           fullName,
           moduleName: mod.name,
           definition: toolDef,
           context,
-        })
+        }
+        tools.push(registered)
+        registrationKeys.set(registered, key)
       }
-    } catch {
-      // Failed to load module tools — skip this module
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException | null)?.code
+      const category = code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND'
+        ? 'dependency-unavailable' : 'import-failed'
+      logger.warning(`Module '${mod.name}' tools failed to load (${category}).`)
+      moduleLoadErrors.set(key, category)
     }
   }
 
@@ -234,7 +287,9 @@ export async function loadModuleTools(
   if (ambiguous.size) {
     console.error(`Datacore refused ${ambiguous.size} ambiguous module tool name(s); reconcile duplicate manifests.`)
   }
-  return tools.filter(tool => !ambiguous.has(tool.fullName))
+  const registered = tools.filter(tool => !ambiguous.has(tool.fullName))
+  for (const tool of registered) moduleRegisteredTools.get(registrationKeys.get(tool)!)!.add(tool.definition.name)
+  return registered
 }
 
 /**

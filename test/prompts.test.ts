@@ -4,24 +4,24 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { registerPrompts } from '../src/prompts.js'
 
 describe('MCP Prompts', () => {
-  let handlers: Map<string, Function>
+  let handlers: Function[]
 
   beforeEach(() => {
-    handlers = new Map()
+    handlers = []
     const server = {
-      setRequestHandler: (schema: any, handler: Function) => {
-        handlers.set(schema.method ?? schema.type ?? JSON.stringify(schema), handler)
+      setRequestHandler: (_schema: any, handler: Function) => {
+        handlers.push(handler)
       },
     } as any
     registerPrompts(server)
   })
 
   it('registers list and get prompt handlers', () => {
-    expect(handlers.size).toBe(2)
+    expect(handlers.length).toBe(2)
   })
 
   it('lists all prompts', async () => {
-    const listHandler = [...handlers.values()][0]
+    const listHandler = handlers[0]
     const result = await listHandler()
     expect(result.prompts).toHaveLength(2)
     const names = result.prompts.map((p: any) => p.name)
@@ -30,7 +30,7 @@ describe('MCP Prompts', () => {
   })
 
   it('prompts have descriptions and titles', async () => {
-    const listHandler = [...handlers.values()][0]
+    const listHandler = handlers[0]
     const result = await listHandler()
     for (const prompt of result.prompts) {
       expect(prompt.description).toBeTruthy()
@@ -39,7 +39,7 @@ describe('MCP Prompts', () => {
   })
 
   it('datacore-guide prompt has no arguments', async () => {
-    const listHandler = [...handlers.values()][0]
+    const listHandler = handlers[0]
     const result = await listHandler()
     const guide = result.prompts.find((p: any) => p.name === 'datacore-guide')
     expect(guide.arguments).toBeUndefined()
@@ -47,7 +47,7 @@ describe('MCP Prompts', () => {
 
   describe('GetPrompt', () => {
     it('returns capture-guide prompt', async () => {
-      const getHandler = [...handlers.values()][1]
+      const getHandler = handlers[1]
       const result = await getHandler({ params: { name: 'datacore-capture-guide', arguments: { type: 'journal' } } })
       expect(result.messages).toHaveLength(1)
       expect(result.messages[0].role).toBe('user')
@@ -55,7 +55,7 @@ describe('MCP Prompts', () => {
     })
 
     it('returns guide prompt with tool reference', async () => {
-      const getHandler = [...handlers.values()][1]
+      const getHandler = handlers[1]
       const result = await getHandler({ params: { name: 'datacore-guide' } })
       const text = result.messages[0].content.text
       expect(result.messages[0].role).toBe('assistant')
@@ -66,7 +66,7 @@ describe('MCP Prompts', () => {
     })
 
     it('throws for unknown prompt', async () => {
-      const getHandler = [...handlers.values()][1]
+      const getHandler = handlers[1]
       await expect(getHandler({ params: { name: 'nonexistent' } })).rejects.toThrow('Unknown prompt: nonexistent')
     })
   })

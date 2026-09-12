@@ -42,7 +42,7 @@ describe('SessionLogger', () => {
     logger.logToolCall('datacore.learn', {}, null, 50, false, 'validation error')
     const log = logger.getLog()
     expect(log.tool_calls[0].success).toBe(false)
-    expect(log.tool_calls[0].error).toBe('validation error')
+    expect(log.tool_calls[0].error).toBe('tool-failed')
   })
 
   it('trackEngrams records injected and created IDs', () => {
@@ -84,4 +84,22 @@ describe('SessionLogger', () => {
     const files = fs.readdirSync(tmpDir)
     expect(files).toHaveLength(0)
   })
+})
+
+describe('benchmark privacy and publication',()=>{
+ it('retains failure metadata without the provider exception or tool contents',()=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'datacore-bench-private-'))
+  try{
+   const log=new SessionLogger(root,'fixture');log.startSession('fixture')
+   log.logToolCall('fixture',{token:'PRIVATE_INPUT'}, {secret:'PRIVATE_OUTPUT'},10,false,'PRIVATE_EXCEPTION')
+   log.endSession()
+   const file=path.join(root,fs.readdirSync(root)[0]);const body=fs.readFileSync(file,'utf8')
+   expect(body).not.toContain('PRIVATE_');expect(JSON.parse(body).tool_calls[0].success).toBe(false)
+   expect(fs.statSync(file).mode & 0o777).toBe(0o600)
+  }finally{fs.rmSync(root,{recursive:true,force:true})}
+ })
+ it('rejects a session identifier that could select another directory',()=>{
+  const log=new SessionLogger('/not-used','fixture')
+  for(const id of ['../outside','a/b','', 'x'.repeat(129)])expect(()=>log.startSession(id)).toThrow()
+ })
 })

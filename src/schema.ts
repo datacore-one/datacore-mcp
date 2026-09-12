@@ -27,7 +27,33 @@
  *      module is unavailable"; it does not collapse.
  */
 
+import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
+import { Ajv, type ValidateFunction } from 'ajv'
+import { Ajv2020 } from 'ajv/dist/2020.js'
+import addFormats from 'ajv-formats'
+
+const options = { strict: false, strictSchema: true, ownProperties: true, allErrors: false }
+const validators = new WeakMap<object, { serialized: string; validate: ValidateFunction }>()
+
+export class ArgumentValidationError extends Error {
+  constructor() { super('Arguments do not satisfy the tool schema') }
+}
+
+function jsonValidator(schema: object): ValidateFunction {
+  const serialized = JSON.stringify(schema)
+  const cached = validators.get(schema)
+  if (!cached || cached.serialized !== serialized) {
+    const uri = (schema as {$schema?: unknown}).$schema
+    // Module-local $id values must not share a validator's global namespace.
+    const compiler = typeof uri === 'string' && uri.includes('2020-12') ? new Ajv2020(options) : new Ajv(options)
+    addFormats(compiler)
+    const validate = compiler.compile(schema)
+    validators.set(schema, { serialized, validate })
+    return validate
+  }
+  return cached.validate
+}
 
 /** Zod schemas carry `_def` and a `parse` method; JSON Schema objects do not. */
 export function isZodSchema(s: unknown): boolean {
@@ -52,8 +78,14 @@ function looksLikeJsonSchema(s: unknown): boolean {
  * skip that one tool.
  */
 export function toJsonSchema(s: unknown): object {
-  if (isZodSchema(s)) return zodToJsonSchema(s as never) as object
-  if (looksLikeJsonSchema(s)) return s as object
+  if (isZodSchema(s)) {
+    return '_zod' in (s as object) ? z.toJSONSchema(s as z.ZodType) as object
+      : zodToJsonSchema(s as never) as object
+  }
+  if (looksLikeJsonSchema(s)) {
+    jsonValidator(s as object)
+    return s as object
+  }
   throw new Error(
     'inputSchema is neither a Zod schema nor a JSON Schema object ' +
       `(got ${s === null ? 'null' : typeof s})`,
@@ -61,16 +93,18 @@ export function toJsonSchema(s: unknown): object {
 }
 
 /**
- * Validate arguments when we can.
- *
- * A Zod schema validates. A raw JSON Schema does NOT — we deliberately do not
- * pull in a JSON Schema validator to enforce a contract the module itself
- * declared, and the module's handler is the thing that has to be robust to its
- * own inputs anyway. Passing through is the honest behaviour: it is better than
- * pretending validation occurred, and far better than throwing on every call to
- * a tool whose schema shape we chose to accept.
+ * Enforce the declared contract for either supported schema representation.
+ * No remote references are fetched and failed validation never coerces,
+ * removes or defaults caller data. Business authorization remains the handler's
+ * responsibility. Invalid contracts are rejected during tool registration.
  */
 export function validateArgs(schema: unknown, args: unknown): unknown {
-  if (isZodSchema(schema)) return (schema as { parse: (a: unknown) => unknown }).parse(args)
+  if (isZodSchema(schema)) {
+    try { return (schema as { parse: (a: unknown) => unknown }).parse(args) }
+    catch { throw new ArgumentValidationError() }
+  }
+  if (!looksLikeJsonSchema(schema) || !jsonValidator(schema as object)(args)) {
+    throw new ArgumentValidationError()
+  }
   return args
 }

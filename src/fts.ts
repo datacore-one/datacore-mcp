@@ -110,9 +110,9 @@ export function searchFts(dbPath: string, query: string, options: FtsOptions = {
       title: r.title,
       type: r.type,
     }))
-  } catch (e) {
+  } catch {
     // Log FTS errors for debugging — silent failures make FTS-to-fallback invisible
-    if (process.env.DEBUG) console.error(`FTS query error for "${query}":`, e)
+    if (process.env.DEBUG) console.error('FTS search failed; using filesystem fallback')
     return []
   } finally {
     db.close()

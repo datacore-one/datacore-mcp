@@ -6,8 +6,7 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
-import { toJsonSchema, validateArgs } from './schema.js'
+import { ArgumentValidationError, toJsonSchema, validateArgs } from './schema.js'
 import { detectStorage, initCore, type StorageConfig } from './storage.js'
 import { loadConfig } from './config.js'
 import { currentVersion, checkForUpdate } from './version.js'
@@ -37,10 +36,6 @@ import { registerResources } from './resources.js'
 import { registerPrompts } from './prompts.js'
 import { DatacortexBridge } from './datacortex.js'
 import { SessionLogger } from './bench/session-logger.js'
-
-function isZodSchema(schema: unknown): schema is z.ZodType {
-  return typeof schema === 'object' && schema !== null && '_def' in schema && typeof (schema as any)._def?.typeName === 'string'
-}
 
 let storage: StorageConfig
 let updateAvailable: string | null = null
@@ -80,7 +75,8 @@ export function createServer(): Server {
         ...coreTools.map(t => ({
           name: t.name,
           description: t.description,
-          inputSchema: zodToJsonSchema(t.inputSchema),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          inputSchema: z.toJSONSchema(t.inputSchema),
         })),
         // Per-tool isolation. One module with an unusable schema must not be
         // able to delete every other tool from the server — which is exactly
@@ -93,14 +89,13 @@ export function createServer(): Server {
               description: t.definition.description,
               inputSchema: toJsonSchema(t.definition.inputSchema),
             }]
-          } catch (err) {
+          } catch {
             // logger, not console: it writes to stderr (stdout carries the
             // JSON-RPC stream, and anything written there corrupts the
             // protocol) AND sends an MCP logging notification, so the client
             // is told why a tool is missing instead of silently not seeing it.
             logger.warning(
-              `Skipping module tool ${t.fullName}: ` +
-              `${err instanceof Error ? err.message : String(err)}`,
+              `Skipping module tool ${t.fullName}: invalid argument schema.`,
             )
             return []
           }
@@ -123,7 +118,9 @@ export function createServer(): Server {
       response.push({ type: 'text', text: JSON.stringify(result, null, 2) })
       return { content: response }
     } catch (error) {
-      return { content: [{ type: 'text', text: `Error: ${error}` }], isError: true }
+      const message = error instanceof z.ZodError || error instanceof ArgumentValidationError ? 'Invalid tool arguments.'
+        : 'Datacore tool failed; inspect the scoped module and runtime health report.'
+      return { content: [{ type: 'text', text: message }], isError: true }
     }
   })
 
@@ -161,7 +158,7 @@ async function routeTool(name: string, args: Record<string, unknown>): Promise<u
     return callResult
   } catch (e) {
     callSuccess = false
-    callError = e instanceof Error ? e.message : String(e)
+    callError = 'tool-failed'
     throw e
   } finally {
     if (benchLogger) {

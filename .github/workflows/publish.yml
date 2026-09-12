@@ -1,0 +1,53 @@
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: npm publish
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify exact source and runtime
+        run: |
+          ./node_modules/.bin/tsc --noEmit
+          npm run verify
+
+      - name: Publish to npm
+        run: |
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify published version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Verifying npm shows @datacore-one/mcp@$VERSION ..."
+          for i in 1 2 3 4 5; do
+            LIVE=$(npm view @datacore-one/mcp version 2>/dev/null || true)
+            if [ "$LIVE" = "$VERSION" ]; then
+              echo "Published: @datacore-one/mcp@$LIVE"
+              exit 0
+            fi
+            echo "  Attempt $i: npm shows $LIVE, waiting 10s..."
+            sleep 10
+          done
+          echo "Published version could not be verified; inspect registry state before retrying." >&2
+          exit 1

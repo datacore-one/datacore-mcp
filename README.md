@@ -2,13 +2,13 @@
 
 [![CI](https://github.com/datacore-one/datacore-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/datacore-one/datacore-mcp/actions/workflows/ci.yml)
 
-A plain-text second brain for AI assistants — journal, knowledge, and productivity tools over MCP.
+The knowledge and task orchestration layer for AI assistants — journals, GTD, Zettelkasten, and autonomous workflows over plain-text files via MCP.
 
 ## Why
 
-AI assistants are great at reasoning but have nowhere to put what matters: your decisions, your notes, your day.
+AI assistants are great at reasoning but have nowhere to put what matters: your decisions, your tasks, your notes.
 
-Datacore gives them a structured, plain-text second brain — capture journal entries and knowledge notes, search them back, get canonical date handling, and extend with modules (GTD, health, trading, and more).
+Datacore gives them a structured, plain-text home — capture journal entries, manage GTD task lists, build a Zettelkasten, and extend with modules for autonomous overnight workflows.
 
 Persistent **memory** — engrams, learning, and recall — is handled by Datacore's companion server, [PLUR](https://www.npmjs.com/package/@plur-ai/mcp) (`plur_*` tools). Run the two side by side: PLUR remembers, Datacore organizes.
 
@@ -185,7 +185,7 @@ Datacore organizes; **[PLUR](https://www.npmjs.com/package/@plur-ai/mcp) remembe
 
 Persistent memory — engrams, learning, recall, feedback, and engram packs — lives in the companion PLUR MCP server (`plur_*` tools). Datacore scaffolds the shared, plain-text data directory (including `engrams.yaml` and `packs/`) that PLUR reads and writes, so both servers work against the same `~/Data` or `~/Datacore` store.
 
-Connect both in your MCP client and your AI gets a second brain (Datacore) plus persistent memory (PLUR). See the [PLUR docs](https://www.npmjs.com/package/@plur-ai/mcp) for the memory toolset and engram lifecycle.
+Connect both in your MCP client and your AI gets structured knowledge and task management (Datacore) plus persistent memory (PLUR). See the [PLUR docs](https://www.npmjs.com/package/@plur-ai/mcp) for the memory toolset and engram lifecycle.
 
 > **Upgrading from ≤1.5?** The engram engine (`learn`, `inject`, `recall`, `promote`, `feedback`, `forget`, packs, and the engagement/XP layer) moved out of Datacore into PLUR. Install [`@plur-ai/mcp`](https://www.npmjs.com/package/@plur-ai/mcp) alongside Datacore to keep that functionality.
 
@@ -246,6 +246,22 @@ Scope is part of each space module's callable identity. Calls never choose a dat
 **Upgrade:** update callers of space-installed tools to the name advertised by `tools/list`. Their old unqualified names have no implicit alias, since such an alias could silently select a different space. Existing global names and data paths remain stable. Duplicate names (including collisions with core tools) and invalid or overlong identifiers are refused; unrelated tools remain available. Names must fit the 64-character MCP limit.
 
 The full-mode server exposes all installed scopes to its owner. `dataPath` is a routing convention: trusted module handlers execute in the same process and retain its filesystem privileges. Use independently restricted processes, credentials and storage roots where separate security contexts are required.
+
+Registration validates handlers and argument contracts. Zod 3, Zod 4 and
+supported JSON Schema tools retain input validation; raw JSON Schema cannot
+fetch remote references or silently coerce input. Health reports the actual
+startup registration snapshot for each installed scope, without importing
+modules again or copying raw exceptions. A name shared by multiple scopes
+cannot select one health result implicitly.
+
+The `@datacore-one/mcp/runtime` export provides `z` and `yaml` from the selected
+package environment in ESM and CommonJS forms. The module must first be able to
+resolve the MCP package through an explicit installed package binding. A global
+installation or `NODE_PATH` alone does not make an ESM import resolve. Qualify
+that binding from the module's physical directory and service identity, or ship
+a qualified module bundle. [DIP-0049](https://github.com/datacore-one/datacore-dips/blob/main/DIP-0049-module-tool-loading-architecture.md)
+is a draft design discussion, not a claim that its entire installation proposal
+has been implemented.
 
 ## License
 
