@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.1.3] — 2026-09-12
+
+- **Security**: pin `hono ≥4.13.5` via overrides — clears 3 Dependabot CVEs (#69/#70/#71: parseBody memory exhaustion, toSSG path traversal, query parser cache poisoning). Interim fix until `@modelcontextprotocol/sdk` ships the upstream upgrade.
+- Dependency cleanup: removed 5 redundant overrides now that upstream ships patched versions; tightened `fast-uri` pin to `≥3.1.6` and `qs` to `≥6.16.0`
+
 ## [2.1.2] — 2026-08-29
 
 - Zero open Dependabot alerts: `hono`, `body-parser`, and `nanoid` pinned via `overrides` — all medium/low alerts resolved
