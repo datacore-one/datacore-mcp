@@ -255,13 +255,24 @@ Full Datacore installations discover module tools from `.datacore/modules/` and 
 
 | Installation | Callable name | Default data directory |
 | --- | --- | --- |
-| Global `crm` | `datacore_crm_lookup` | `0-personal/.datacore/modules/crm/data/` |
-| Personal `crm` | `datacore_0-personal_crm_lookup` | `0-personal/.datacore/modules/crm/data/` |
-| Team `crm` | `datacore_1-team_crm_lookup` | `1-team/.datacore/modules/crm/data/` |
+| Global `crm` | `datacore_crm_lookup` | `0-personal/.datacore/module-data/crm/data/` |
+| Personal `crm` | `datacore_0-personal_crm_lookup` | `0-personal/.datacore/module-data/crm/data/` |
+| Team `crm` | `datacore_1-team_crm_lookup` | `1-team/.datacore/module-data/crm/data/` |
 
-Scope is part of each space module's callable identity. Calls never choose a data destination by discovery order or fall back to a module in another space. Third-party module `acme/crm` uses namespace `acme-crm`; its existing data directory uses the manifest name (`.../modules/acme/crm/data/`) and is not moved during registration. Module code directories may use the flattened name `acme-crm`.
+Scope is part of each space module's callable identity. Calls never choose a data destination by discovery order or fall back to a module in another space. Third-party module `acme/crm` uses namespace `acme-crm`; its private data directory uses the manifest name (`.../module-data/acme/crm/data/`). Module code directories may use the flattened name `acme-crm`.
 
-**Upgrade:** update callers of space-installed tools to the name advertised by `tools/list`. Their old unqualified names have no implicit alias, since such an alias could silently select a different space. Existing global names and data paths remain stable. Duplicate names (including collisions with core tools) and invalid or overlong identifiers are refused; unrelated tools remain available. Names must fit the 64-character MCP limit.
+**Upgrade:** update callers of space-installed tools to the name advertised by `tools/list`. Their old unqualified names have no implicit alias, since such an alias could silently select a different space. Existing global callable names remain stable. Duplicate names (including collisions with core tools) and invalid or overlong identifiers are refused; unrelated tools remain available. Names must fit the 64-character MCP limit.
+
+Private data now has a separate root from installed module code. Legacy `data`,
+`state`, or `settings.local.yaml` in either the installed code or historical
+scoped directory blocks that module with `module-data-unverified`. Stop its
+writers, preserve backups, and use core's `module_data_migrate.py` with the
+verified space identity and legacy source directory. The helper retains the
+originals in private backup and supports interrupted retries; an incomplete
+receipt keeps the module unavailable. See core's `.datacore/lib/RUNTIME.md`
+for the procedure and filesystem limits. Loading modules never moves old data
+or silently replaces it with an empty store. Verify real reads and ownership
+under the installed service identity before resuming it.
 
 The full-mode server exposes all installed scopes to its owner. `dataPath` is a routing convention: trusted module handlers execute in the same process and retain its filesystem privileges. Use independently restricted processes, credentials and storage roots where separate security contexts are required.
 

@@ -8,6 +8,7 @@ import { toJsonSchema } from './schema.js'
 import type { StorageConfig } from './storage.js'
 import { readSpaceCatalog, personalSpace } from './space-catalog.js'
 import { pathToFileURL } from 'node:url'
+import { moduleDataPath, validModuleName } from './module-data.js'
 
 export interface ModuleToolDefinition {
   name: string              // Without namespace prefix (e.g., 'inbox_count')
@@ -203,7 +204,7 @@ export async function loadModuleTools(
     moduleRegisteredTools.set(key, new Set())
     // Manifest names are path components as well as identifiers. Validate
     // before constructing data paths or importing a module's handlers.
-    if (typeof mod.name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/.test(mod.name)
+    if (!validModuleName(mod.name)
       || (mod.scope === 'space' && (typeof mod.spaceName !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(mod.spaceName)))) {
       invalidNames++
       moduleLoadErrors.set(key, 'invalid-identifier')
@@ -219,6 +220,12 @@ export async function loadModuleTools(
       moduleLoadErrors.set(key, 'data-scope-unverified')
       continue
     }
+    let dataPath: string
+    try { dataPath = moduleDataPath(destination.rootPath, mod.name, mod.modulePath, destination.name) }
+    catch {
+      moduleLoadErrors.set(key, 'module-data-unverified')
+      continue
+    }
 
     // JavaScript is the runtime artifact; no compiler runs during discovery.
     const toolsIndexPath = path.join(mod.modulePath, 'tools', 'index.js')
@@ -227,9 +234,6 @@ export async function loadModuleTools(
     try {
       const toolsModule = await import(pathToFileURL(toolsIndexPath).href)
       const moduleTools: ModuleToolDefinition[] = toolsModule.tools || toolsModule.default?.tools || []
-
-      // Build data path for this module's private data
-      const dataPath = path.join(destination.rootPath, '.datacore', 'modules', mod.name, 'data')
 
       const context: ModuleToolContext = {
         storage,

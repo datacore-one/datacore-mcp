@@ -230,7 +230,7 @@ describe('loadModuleTools', () => {
 
     expect(tools).toHaveLength(1)
     expect(tools[0].context.dataPath).toBe(
-      path.join(tmpDir, '1-team', '.datacore', 'modules', 'crm', 'data')
+      path.join(tmpDir, '1-team', '.datacore', 'module-data', 'crm', 'data')
     )
     expect(tools[0].context.spaceName).toBe('team')
     expect(tools[0].fullName).toBe('datacore_team_crm_lookup')

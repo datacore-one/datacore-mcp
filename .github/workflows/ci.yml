@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: datacore-one/datacore
-          ref: 7c1c197ad876247e31cb9cb4bf2f478ec85b1d4e
+          ref: 98f4119925e7ee1842b454175ebd4d6384b1b58c
           path: .core-test
           persist-credentials: false
 

@@ -51,7 +51,7 @@ try {
         assert.notEqual(response.isError, true)
         const actual = JSON.parse(response.content.at(-1).text)
         assert.equal(actual.space, identity || 'global')
-        assert.equal(actual.dataPath, path.join(root, scope || '0-personal', '.datacore/modules/fixture/data'))
+        assert.equal(actual.dataPath, path.join(root, scope || '0-personal', '.datacore/module-data/fixture/data'))
       }
       await writeFile(path.join(root, '0-personal/.datacore/config.yaml'), 'space: {name: personal, type: team}\n')
       const stale = await client.callTool({ name: 'datacore_fixture_identify', arguments: {} })

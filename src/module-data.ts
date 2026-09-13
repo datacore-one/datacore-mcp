@@ -1,0 +1,48 @@
+/** Private mutable module state must never be rooted in installed code. */
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { directoryWithin } from './durable-files.js'
+import { readTextWithin } from './safe-read.js'
+
+export function validModuleName(name: unknown): name is string {
+  return typeof name === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/.test(name)
+}
+
+function exists(pathname: string): boolean {
+  try { fs.lstatSync(pathname); return true } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+}
+
+export function moduleDataPath(spaceRoot: string, name: string, installedCode: string, spaceName: string): string {
+  if (!validModuleName(name)) throw new Error('Invalid module identifier')
+  const root = fs.realpathSync(spaceRoot)
+  const legacy = path.join(root, '.datacore/modules', name)
+  // Both historical layouts are relevant: globally misplaced code/data and
+  // the old scope-specific context destination. Never hide either with a new
+  // empty store. Migration is an explicit, quiescent deployment operation.
+  for (const candidate of new Set([legacy, installedCode])) {
+    if (exists(candidate)) fs.realpathSync(candidate)
+    for (const component of ['data', 'state', 'settings.local.yaml']) {
+      if (exists(path.join(candidate, component))) throw new Error('Legacy module state requires verified migration')
+    }
+  }
+  const privateRoot = directoryWithin(root, path.join(root, '.datacore/module-data', name))
+  let current = path.join(root, '.datacore/module-data')
+  for (const component of ['', ...name.split('/')]) {
+    current = path.join(current, component)
+    const info = fs.statSync(current)
+    if ((info.mode & 0o077) !== 0 || (process.getuid && info.uid !== process.getuid())) {
+      throw new Error('Module state is not private to this runtime identity')
+    }
+  }
+  const receipt = readTextWithin(root, path.join(privateRoot, '.migration.json'))
+  if (receipt !== null) {
+    const migration = JSON.parse(receipt)
+    if (migration?.version !== 1 || migration?.status !== 'complete' || migration?.module !== name || migration?.space !== spaceName) {
+      throw new Error('Module migration is incomplete')
+    }
+  }
+  return directoryWithin(root, path.join(privateRoot, 'data'))
+}

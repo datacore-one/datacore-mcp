@@ -45,7 +45,7 @@ describe('module routing is unambiguous', () => {
       for (const tool of tools) {
         const response = await tool.definition.handler({}, tool.context) as { dataPath: string }
         expect(response.dataPath).toBe(path.join(storage.basePath,
-          tool.context.spaceName === 'team' ? '1-team' : '0-personal', '.datacore/modules/fixture/data'))
+          tool.context.spaceName === 'team' ? '1-team' : '0-personal', '.datacore/module-data/fixture/data'))
       }
     },
   )
@@ -81,7 +81,7 @@ describe('module routing is unambiguous', () => {
     const tools = await loadModuleTools(modules, storage)
     expect(tools.map(tool => tool.fullName)).toEqual(['datacore_acme-fixture_identify'])
     expect(tools[0].context.dataPath).toBe(path.join(storage.basePath,
-      '0-personal/.datacore/modules/acme/fixture/data'))
+      '0-personal/.datacore/module-data/acme/fixture/data'))
   })
 
   it.each(['../fixture', '/fixture', 'acme/../fixture', 'fixture.name', '', 12])(
