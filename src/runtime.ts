@@ -14,3 +14,6 @@
 
 export { z } from 'zod'
 export * as yaml from 'js-yaml'
+
+// Installed module bridges share the same explicit interpreter selection.
+export { findPython } from './runtime-python.js'

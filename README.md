@@ -283,8 +283,12 @@ startup registration snapshot for each installed scope, without importing
 modules again or copying raw exceptions. A name shared by multiple scopes
 cannot select one health result implicitly.
 
-The `@datacore-one/mcp/runtime` export provides `z` and `yaml` from the selected
-package environment in ESM and CommonJS forms. The module must first be able to
+The `@datacore-one/mcp/runtime` export provides `z`, `yaml` and `findPython` from
+the selected package environment in ESM and CommonJS forms. `findPython()` uses
+the same Python 3.10+ selection as core discovery; an invalid explicit
+`DATACORE_PYTHON` returns no interpreter and never enables fallback. Delegates
+must still select installed code, bound their requests and subprocess lifetime,
+and restrict the child environment. The module must first be able to
 resolve the MCP package through an explicit installed package binding. A global
 installation or `NODE_PATH` alone does not make an ESM import resolve. Qualify
 that binding from the module's physical directory and service identity, or ship

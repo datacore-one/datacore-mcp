@@ -8,9 +8,12 @@ import {pathToFileURL} from 'node:url'
 it('ships working ESM and CommonJS runtime exports',()=>{
  const esm=pathToFileURL(path.join(process.cwd(),'dist/runtime.js')).href
  const cjs=path.join(process.cwd(),'dist/runtime.cjs')
- const check='if(z.string().parse("ok")!=="ok"||yaml.load("a: 1").a!==1)process.exit(3)'
- execFileSync(process.execPath,['--input-type=module','-e',`import {z,yaml} from ${JSON.stringify(esm)};${check}`],{timeout:10000})
- execFileSync(process.execPath,['-e',`const {z,yaml}=require(${JSON.stringify(cjs)});${check}`],{timeout:10000})
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'datacore-python-selection-'))
+ try{
+ const check='if(findPython()!==null)process.exit(4);if(z.string().parse("ok")!=="ok"||yaml.load("a: 1").a!==1)process.exit(3)'
+ execFileSync(process.execPath,['--input-type=module','-e',`import {z,yaml,findPython} from ${JSON.stringify(esm)};${check}`],{timeout:10000,env:{...process.env,DATACORE_PYTHON:path.join(directory,"absent-python")}})
+ execFileSync(process.execPath,['-e',`const {z,yaml,findPython}=require(${JSON.stringify(cjs)});${check}`],{timeout:10000,env:{...process.env,DATACORE_PYTHON:path.join(directory,"absent-python")}})
+ }finally{fs.rmSync(directory,{recursive:true,force:true})}
 })
 it('requires an explicit module-local package binding for a bare ESM runtime import',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'datacore-runtime-export-'))
