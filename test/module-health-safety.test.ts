@@ -6,9 +6,10 @@ import {discoverModules,loadModuleTools,moduleLoadErrors} from '../src/modules.j
 import {handleModulesHealth} from '../src/tools/modules-health.js'
 import {logger} from '../src/logger.js'
 let root:string,storage:any
-beforeEach(()=>{root=fs.mkdtempSync(path.join(os.tmpdir(),'datacore-module-health-'));storage={mode:'full',basePath:root};moduleLoadErrors.clear()})
+beforeEach(()=>{root=fs.mkdtempSync(path.join(os.tmpdir(),'datacore-module-health-'));storage={mode:'full',basePath:root};fs.mkdirSync(path.join(root,'0-personal/org'),{recursive:true});moduleLoadErrors.clear()})
 afterEach(()=>{vi.restoreAllMocks();fs.rmSync(root,{recursive:true,force:true});moduleLoadErrors.clear()})
 function moduleAt(scope:string, source:string){
+ if(scope){fs.mkdirSync(path.join(root,scope,'.datacore'),{recursive:true});fs.writeFileSync(path.join(root,scope,'.datacore/config.yaml'),'space: {name: team, type: team}\n')}
  const target=path.join(root,scope,'.datacore/modules/fixture');fs.mkdirSync(path.join(target,'tools'),{recursive:true})
  fs.writeFileSync(path.join(target,'module.yaml'),'name: fixture\nmanifest_version: 2\nprovides:\n  tools:\n    - name: identify\n')
  fs.writeFileSync(path.join(target,'SKILL.md'),'Fixture');fs.writeFileSync(path.join(target,'CLAUDE.base.md'),'Fixture')

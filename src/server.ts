@@ -7,7 +7,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import { ArgumentValidationError, toJsonSchema, validateArgs } from './schema.js'
-import { detectStorage, initCore, type StorageConfig } from './storage.js'
+import { assertStorageCurrent, detectStorage, initCore, type StorageConfig } from './storage.js'
 import { loadConfig } from './config.js'
 import { currentVersion, checkForUpdate } from './version.js'
 import { TOOLS } from './tools/index.js'
@@ -168,6 +168,7 @@ async function routeTool(name: string, args: Record<string, unknown>): Promise<u
 }
 
 async function routeToolInner(name: string, args: Record<string, unknown>): Promise<unknown> {
+  assertStorageCurrent(storage)
   // Accept legacy dot-namespaced names; route by the advertised underscore form.
   const lookupName = canonicalToolName(name)
   const coreTool = TOOLS.find(t => t.name === lookupName)

@@ -5,11 +5,13 @@ import * as os from 'os'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { createText, directoryWithin, serialized, syncDirectory } from './durable-files.js'
+import { readSpaceCatalog, personalSpace } from './space-catalog.js'
 
 export type StorageMode = 'full' | 'core'
 
 export interface SpacePaths {
   name: string
+  rootPath?: string
   journalPath: string
   knowledgePath: string
 }
@@ -18,9 +20,10 @@ export interface StorageConfig {
   mode: StorageMode
   basePath: string
   engramsPath: string
-  journalPath: string
-  knowledgePath: string
+  journalPath: string | null
+  knowledgePath: string | null
   spaces: SpacePaths[]
+  catalogToken?: string
   packsPath: string
   schemasPath: string
   exchangeInboxPath: string
@@ -63,36 +66,18 @@ export function detectStorage(): StorageConfig {
   return coreConfig(path.join(os.homedir(), 'Datacore'))
 }
 
-function discoverSpaces(basePath: string): SpacePaths[] {
-  const spaces: SpacePaths[] = []
-  try {
-    for (const entry of fs.readdirSync(basePath, { withFileTypes: true })) {
-      if (!entry.isDirectory() || !/^\d+-/.test(entry.name)) continue
-      const spacePath = path.join(basePath, entry.name)
-      const name = entry.name.split('-').slice(1).join('-')
-      // Find journal path (notes/journals/ or journal/)
-      const notesJournals = path.join(spacePath, 'notes', 'journals')
-      const journal = path.join(spacePath, 'journal')
-      const journalPath = fs.existsSync(notesJournals) ? notesJournals : journal
-      // Knowledge path
-      const knowledgePath = path.join(spacePath, '3-knowledge')
-      spaces.push({ name, journalPath, knowledgePath })
-    }
-  } catch { /* ignore */ }
-  return spaces
-}
-
 function fullConfig(basePath: string): StorageConfig {
-  const spaces = discoverSpaces(basePath)
-  // Primary space is 0-personal (first space found, or fallback)
-  const primary = spaces.find(s => s.name === 'personal') ?? spaces[0]
+  basePath = fs.realpathSync(basePath)
+  const spaces = readSpaceCatalog(basePath)
+  const primary = personalSpace(spaces)
   return {
     mode: 'full',
     basePath,
     engramsPath: path.join(basePath, '.datacore', 'learning', 'engrams.yaml'),
-    journalPath: primary?.journalPath ?? path.join(basePath, '0-personal', 'journal'),
-    knowledgePath: primary?.knowledgePath ?? path.join(basePath, '0-personal', '3-knowledge'),
+    journalPath: primary?.journalPath ?? null,
+    knowledgePath: primary?.knowledgePath ?? null,
     spaces,
+    catalogToken: JSON.stringify(spaces),
     packsPath: path.join(basePath, '.datacore', 'learning', 'packs'),
     schemasPath: path.join(basePath, '.datacore', 'learning', 'schemas.yaml'),
     exchangeInboxPath: path.join(basePath, '.datacore', 'learning', 'exchange', 'inbox'),
@@ -100,6 +85,13 @@ function fullConfig(basePath: string): StorageConfig {
     knowledgeSurfacingPath: path.join(basePath, '.datacore', 'state', 'knowledge-surfacing.yaml'),
     archivePath: path.join(basePath, '.datacore', 'learning', 'archive'),
     statePath: path.join(basePath, '.datacore', 'state'),
+  }
+}
+
+export function assertStorageCurrent(storage: Pick<StorageConfig, 'mode' | 'basePath' | 'catalogToken'>): void {
+  if (storage.mode === 'full' && (!storage.catalogToken
+    || JSON.stringify(readSpaceCatalog(storage.basePath)) !== storage.catalogToken)) {
+    throw new Error('Space identity changed or is unverified. Restart after reconciling the installation.')
   }
 }
 

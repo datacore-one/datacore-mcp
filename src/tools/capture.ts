@@ -1,6 +1,6 @@
 // src/tools/capture.ts
 import * as path from 'path'
-import type { StorageConfig } from '../storage.js'
+import { assertStorageCurrent, type StorageConfig } from '../storage.js'
 import { validateContent, validateTitle } from '../limits.js'
 import { appendJournal, createNote } from '../durable-files.js'
 
@@ -25,6 +25,10 @@ export async function handleCapture(args: CaptureArgs, storage: StorageConfig): 
     if (titleError) return { success: false, error: titleError }
   }
   try {
+    assertStorageCurrent(storage)
+    if (!storage.journalPath || !storage.knowledgePath) {
+      return { success: false, error: 'Capture requires one unambiguous personal space.' }
+    }
     if (args.type === 'journal') {
       const { date, time } = localDate()
       const filename = path.join(storage.journalPath, `${date}.md`)

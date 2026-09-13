@@ -8,7 +8,9 @@ export async function handleModulesInfo(
   cachedModules?: DiscoveredModule[],
 ): Promise<unknown> {
   const modules = cachedModules ?? discoverModules(storage)
-  const found = modules.find(m => m.manifest.name === args.module)
+  const matches = modules.filter(m => m.manifest.name === args.module)
+  if (matches.length > 1) return { error: 'Module name is ambiguous across scopes; inspect the complete module list.' }
+  const found = matches[0]
 
   if (!found) {
     return { error: `Module '${args.module}' not found`, installed_modules: modules.map(m => m.name) }

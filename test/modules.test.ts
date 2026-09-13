@@ -22,11 +22,17 @@ function makeStorage(basePath: string): StorageConfig {
 
 function writeModuleYaml(dir: string, manifest: Record<string, unknown>): void {
   fs.mkdirSync(dir, { recursive: true })
+  const spaceRoot = dir.split(`${path.sep}.datacore${path.sep}`)[0]
+  if (spaceRoot !== tmpDir) {
+    const name = path.basename(spaceRoot).replace(/^\d+-/, '')
+    fs.writeFileSync(path.join(spaceRoot, '.datacore/config.yaml'), yaml.dump({ space: { name, type: name === 'personal' ? 'personal' : 'team' } }))
+  }
   fs.writeFileSync(path.join(dir, 'module.yaml'), yaml.dump(manifest))
 }
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'datacore-mcp-test-'))
+  tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'datacore-mcp-test-')))
+  fs.mkdirSync(path.join(tmpDir, '0-personal/org'), { recursive: true })
   // Create .datacore so it's detected as full mode
   fs.mkdirSync(path.join(tmpDir, '.datacore', 'modules'), { recursive: true })
 })
@@ -68,7 +74,7 @@ describe('discoverModules', () => {
     expect(modules).toHaveLength(1)
     expect(modules[0].name).toBe('crm')
     expect(modules[0].scope).toBe('space')
-    expect(modules[0].spaceName).toBe('1-teamspace')
+    expect(modules[0].spaceName).toBe('teamspace')
   })
 
   it('discovers both global and space modules', () => {
@@ -226,8 +232,8 @@ describe('loadModuleTools', () => {
     expect(tools[0].context.dataPath).toBe(
       path.join(tmpDir, '1-team', '.datacore', 'modules', 'crm', 'data')
     )
-    expect(tools[0].context.spaceName).toBe('1-team')
-    expect(tools[0].fullName).toBe('datacore_1-team_crm_lookup')
+    expect(tools[0].context.spaceName).toBe('team')
+    expect(tools[0].fullName).toBe('datacore_team_crm_lookup')
   })
 })
 

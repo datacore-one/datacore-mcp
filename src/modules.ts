@@ -6,6 +6,8 @@ import { z } from 'zod'
 import { logger } from './logger.js'
 import { toJsonSchema } from './schema.js'
 import type { StorageConfig } from './storage.js'
+import { readSpaceCatalog, personalSpace } from './space-catalog.js'
+import { pathToFileURL } from 'node:url'
 
 export interface ModuleToolDefinition {
   name: string              // Without namespace prefix (e.g., 'inbox_count')
@@ -70,6 +72,7 @@ export interface DiscoveredModule {
   isSymlink: boolean        // True when the entry in .datacore/modules/ is a symlink
   scope: 'global' | 'space'
   spaceName?: string
+  spacePath?: string
 }
 
 export interface RegisteredModuleTool {
@@ -103,17 +106,12 @@ export function discoverModules(storage: StorageConfig): DiscoveredModule[] {
   const globalModulesDir = path.join(storage.basePath, '.datacore', 'modules')
   modules.push(...scanModulesDir(globalModulesDir, 'global'))
 
-  // 2. Space modules: basePath/[0-9]-*//.datacore/modules/*/
-  try {
-    const entries = fs.readdirSync(storage.basePath)
-    for (const entry of entries) {
-      if (/^\d+-/.test(entry)) {
-        const spaceModulesDir = path.join(storage.basePath, entry, '.datacore', 'modules')
-        modules.push(...scanModulesDir(spaceModulesDir, 'space', entry))
-      }
-    }
-  } catch {
-    // basePath not readable — skip space scan
+  // The installed core catalog is authoritative for every consumer.
+  // A root space shares the global code directory and is scanned only once.
+  for (const space of readSpaceCatalog(storage.basePath)) {
+    if (space.rootPath === fs.realpathSync(storage.basePath)) continue
+    modules.push(...scanModulesDir(path.join(space.rootPath, '.datacore/modules'),
+      'space', space.name, space.rootPath))
   }
 
   return modules
@@ -123,6 +121,7 @@ function scanModulesDir(
   modulesDir: string,
   scope: 'global' | 'space',
   spaceName?: string,
+  spacePath?: string,
 ): DiscoveredModule[] {
   const modules: DiscoveredModule[] = []
 
@@ -165,6 +164,7 @@ function scanModulesDir(
           isSymlink,
           scope,
           spaceName,
+          spacePath,
         })
       } catch {
         // Invalid YAML or missing name — skip
@@ -195,6 +195,8 @@ export async function loadModuleTools(
   moduleRegisteredTools.clear()
   const registrationKeys = new Map<RegisteredModuleTool, string>()
   let invalidNames = 0
+  const spaces = storage.mode === 'full' ? readSpaceCatalog(storage.basePath) : []
+  const primary = personalSpace(spaces)
 
   for (const mod of modules) {
     const key = moduleLoadKey(mod)
@@ -202,7 +204,7 @@ export async function loadModuleTools(
     // Manifest names are path components as well as identifiers. Validate
     // before constructing data paths or importing a module's handlers.
     if (typeof mod.name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/.test(mod.name)
-      || (mod.scope === 'space' && (typeof mod.spaceName !== 'string' || !/^\d+-[a-zA-Z0-9_-]+$/.test(mod.spaceName)))) {
+      || (mod.scope === 'space' && (typeof mod.spaceName !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(mod.spaceName)))) {
       invalidNames++
       moduleLoadErrors.set(key, 'invalid-identifier')
       continue
@@ -210,18 +212,24 @@ export async function loadModuleTools(
     const declaredTools = mod.manifest.provides?.tools
     if (!Array.isArray(declaredTools) || declaredTools.length === 0) continue
 
+    const destination = mod.scope === 'space'
+      ? spaces.find(s => s.name === mod.spaceName && s.rootPath === mod.spacePath)
+      : primary
+    if (!destination) {
+      moduleLoadErrors.set(key, 'data-scope-unverified')
+      continue
+    }
+
     // JavaScript is the runtime artifact; no compiler runs during discovery.
     const toolsIndexPath = path.join(mod.modulePath, 'tools', 'index.js')
     if (!fs.existsSync(toolsIndexPath)) continue
 
     try {
-      const toolsModule = await import(toolsIndexPath)
+      const toolsModule = await import(pathToFileURL(toolsIndexPath).href)
       const moduleTools: ModuleToolDefinition[] = toolsModule.tools || toolsModule.default?.tools || []
 
       // Build data path for this module's private data
-      const dataPath = mod.scope === 'space' && mod.spaceName
-        ? path.join(storage.basePath, mod.spaceName, '.datacore', 'modules', mod.name, 'data')
-        : path.join(storage.basePath, '0-personal', '.datacore', 'modules', mod.name, 'data')
+      const dataPath = path.join(destination.rootPath, '.datacore', 'modules', mod.name, 'data')
 
       const context: ModuleToolContext = {
         storage,

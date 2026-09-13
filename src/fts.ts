@@ -15,6 +15,8 @@ export interface FtsOptions {
   includeStubs?: boolean
   limit?: number
   scope?: 'journal' | 'knowledge' | 'all'
+  rootPath?: string
+  onUnavailable?: () => void
 }
 
 /**
@@ -64,8 +66,15 @@ export function searchFts(dbPath: string, query: string, options: FtsOptions = {
 
   let db: InstanceType<typeof Database>
   try {
+    const root = path.resolve(options.rootPath ?? path.dirname(path.dirname(dbPath)))
+    const relative = path.relative(root, path.resolve(dbPath))
+    const info = fs.lstatSync(dbPath)
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
+      || fs.realpathSync(dbPath) !== path.join(fs.realpathSync(root), relative)
+      || !info.isFile() || info.nlink !== 1) throw new Error()
     db = new Database(dbPath, { readonly: true })
   } catch {
+    options.onUnavailable?.()
     return []
   }
 
@@ -111,6 +120,7 @@ export function searchFts(dbPath: string, query: string, options: FtsOptions = {
       type: r.type,
     }))
   } catch {
+    options.onUnavailable?.()
     // Log FTS errors for debugging — silent failures make FTS-to-fallback invisible
     if (process.env.DEBUG) console.error('FTS search failed; using filesystem fallback')
     return []

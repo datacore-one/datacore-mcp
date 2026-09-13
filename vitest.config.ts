@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    exclude: ['**/node_modules/**', '**/.worktrees/**'],
+    exclude: ['**/node_modules/**', '**/.worktrees/**', '**/.core-test/**'],
     // Run test FILES one at a time.
     //
     // Several suites spawn real processes — the built CLI, an

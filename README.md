@@ -144,6 +144,24 @@ established. Datacortex uses the same interpreter and the module next to that
 installed library, with bounded foreground process cleanup; deployment remains
 responsible for independent OS and credential isolation.
 
+Full-mode space discovery requires the installed `space_catalog.py` version 1
+helper. It calls the core `spaces.py` implementation (DIP-0015) and includes
+root, named, nested and canonical legacy spaces. Missing or malformed discovery
+refuses startup. Personal capture/ingestion and global module data require one
+unambiguous personal space; they never default to a team space. Scoped module
+names use the stable marker name and data paths use its actual directory.
+After a space identity or routing path changes, restart the server; stale
+sessions refuse tool calls. Existing data is not moved or renamed by discovery.
+The earlier audit's unpublished ordinal-based scoped tool names are replaced
+by `datacore_<stable-space-name>_<module>_<tool>`; global names remain unchanged.
+
+Journal resources validate calendar dates and read bounded, unlinked regular
+files. Keyword search reads current source files without retaining a process
+content cache; an index in one space cannot hide matches in another. Linked,
+changing, oversized or unreadable files and scan limits yield an explicit
+incomplete-coverage warning. Files are limited to 4 MiB, with a 32 MiB content
+budget, 10,000 directory entries and depth 32 per keyword search.
+
 Capture and ingestion create private notes with unique filenames and complete,
 non-replacing publication; existing note filenames and contents are preserved.
 Journal capture appends without rewriting earlier entries and syncs before
@@ -266,3 +284,14 @@ has been implemented.
 ## License
 
 MIT
+
+## Development verification
+
+The full release gate exercises both standalone mode and the actual core
+discovery provider. Check out the core commit pinned in `.github/workflows/ci.yml`,
+create a Python 3.10+ virtual environment, and install
+`scripts/requirements-core-tests.txt` with `pip install --require-hashes --no-deps`.
+Set `DATACORE_LIB` to that checkout's absolute `.datacore/lib` path and
+`DATACORE_PYTHON` to the virtual environment's absolute interpreter path. Run
+`npm ci`, `npm run verify`, and `./node_modules/.bin/tsc --noEmit`. CI performs
+these steps in isolated directories and never uses an operator installation.

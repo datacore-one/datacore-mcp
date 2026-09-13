@@ -11,9 +11,15 @@ afterEach(() => {
 })
 
 function install(scopes: string[]) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'datacore-module-scope-'))
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'datacore-module-scope-')))
   fixtures.push(root)
+  fs.mkdirSync(path.join(root, '0-personal/org'), { recursive: true })
   for (const scope of scopes) {
+    if (scope) {
+      fs.mkdirSync(path.join(root, scope, '.datacore'), { recursive: true })
+      const name = scope === '0-personal' ? 'personal' : 'team'
+      fs.writeFileSync(path.join(root, scope, '.datacore/config.yaml'), `space:\n  name: ${name}\n  type: ${name === 'personal' ? 'personal' : 'team'}\n`)
+    }
     const mod = path.join(root, scope, '.datacore/modules/fixture')
     fs.mkdirSync(path.join(mod, 'tools'), { recursive: true })
     fs.writeFileSync(path.join(mod, 'module.yaml'),
@@ -39,7 +45,7 @@ describe('module routing is unambiguous', () => {
       for (const tool of tools) {
         const response = await tool.definition.handler({}, tool.context) as { dataPath: string }
         expect(response.dataPath).toBe(path.join(storage.basePath,
-          tool.context.spaceName ?? '0-personal', '.datacore/modules/fixture/data'))
+          tool.context.spaceName === 'team' ? '1-team' : '0-personal', '.datacore/modules/fixture/data'))
       }
     },
   )
@@ -57,7 +63,7 @@ describe('module routing is unambiguous', () => {
   it('refuses a core name collision while retaining unrelated scoped tools', async () => {
     const storage = install(['', '1-team'])
     const tools = await loadModuleTools(discoverModules(storage), storage, ['datacore_fixture_identify'])
-    expect(tools.map(tool => tool.fullName)).toEqual(['datacore_1-team_fixture_identify'])
+    expect(tools.map(tool => tool.fullName)).toEqual(['datacore_team_fixture_identify'])
   })
 
   it('refuses duplicate manifests without disabling other data scopes', async () => {
@@ -65,7 +71,7 @@ describe('module routing is unambiguous', () => {
     const original = path.join(storage.basePath, '.datacore/modules/fixture')
     fs.cpSync(original, path.join(storage.basePath, '.datacore/modules/duplicate'), { recursive: true })
     const tools = await loadModuleTools(discoverModules(storage), storage)
-    expect(tools.map(tool => tool.fullName)).toEqual(['datacore_1-team_fixture_identify'])
+    expect(tools.map(tool => tool.fullName)).toEqual(['datacore_team_fixture_identify'])
   })
 
   it('uses the documented third-party namespace and preserves its existing data path', async () => {
@@ -84,7 +90,7 @@ describe('module routing is unambiguous', () => {
       const modules = discoverModules(storage)
       modules[0].name = name as string
       const tools = await loadModuleTools(modules, storage)
-      expect(tools.map(tool => tool.fullName)).toEqual(['datacore_1-team_fixture_identify'])
+      expect(tools.map(tool => tool.fullName)).toEqual(['datacore_team_fixture_identify'])
     },
   )
 
@@ -93,7 +99,7 @@ describe('module routing is unambiguous', () => {
     const modules = discoverModules(storage)
     modules[0].name = 'a'.repeat(64)
     const tools = await loadModuleTools(modules, storage)
-    expect(tools.map(tool => tool.fullName)).toEqual(['datacore_1-team_fixture_identify'])
+    expect(tools.map(tool => tool.fullName)).toEqual(['datacore_team_fixture_identify'])
   })
 
   it('rejects collisions after third-party namespace normalization', async () => {

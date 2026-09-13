@@ -27,7 +27,7 @@ describe('detectStorage', () => {
 
     const result = detectStorage()
     expect(result.mode).toBe('full')
-    expect(result.basePath).toBe(dcPath)
+    expect(result.basePath).toBe(fs.realpathSync(dcPath))
   })
 
   it('returns core mode with custom path', () => {

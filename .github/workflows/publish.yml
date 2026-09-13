@@ -22,6 +22,21 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
+      - name: Check out the qualified discovery provider
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: datacore-one/datacore
+          ref: 7c1c197ad876247e31cb9cb4bf2f478ec85b1d4e
+          path: .core-test
+          persist-credentials: false
+
+      - name: Prepare isolated discovery runtime
+        run: |
+          python3 -m venv "$RUNNER_TEMP/datacore-test-python"
+          "$RUNNER_TEMP/datacore-test-python/bin/python" -m pip install --require-hashes --no-deps -r scripts/requirements-core-tests.txt
+          echo "DATACORE_LIB=$GITHUB_WORKSPACE/.core-test/.datacore/lib" >> "$GITHUB_ENV"
+          echo "DATACORE_PYTHON=$RUNNER_TEMP/datacore-test-python/bin/python" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: npm ci
 

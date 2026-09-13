@@ -3,6 +3,7 @@ import * as path from 'path'
 import { validateContent, validateTitle } from '../limits.js'
 import { buildHints } from '../hints.js'
 import { createNote } from '../durable-files.js'
+import { assertStorageCurrent, type StorageMode } from '../storage.js'
 
 interface IngestArgs {
   content: string
@@ -19,7 +20,7 @@ interface IngestResult {
 
 export async function handleIngest(
   args: IngestArgs,
-  paths: { knowledgePath: string; basePath?: string },
+  paths: { knowledgePath: string | null; basePath?: string; mode?: StorageMode; catalogToken?: string },
 ): Promise<IngestResult> {
   const contentError = validateContent(args.content)
   if (contentError) return { success: false, error: contentError }
@@ -30,6 +31,8 @@ export async function handleIngest(
 
   let filePath: string
   try {
+    if (paths.mode === 'full') assertStorageCurrent({ ...paths, mode: 'full', basePath: paths.basePath! })
+    if (!paths.knowledgePath) return { success: false, error: 'Ingestion requires one unambiguous personal space.' }
     filePath = createNote(paths.basePath ?? path.dirname(paths.knowledgePath), paths.knowledgePath,
       args.content, args.title ?? 'Ingested Note', args.tags, true)
   } catch {
