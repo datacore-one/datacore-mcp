@@ -90,6 +90,7 @@ export interface RegisteredModuleTool {
  */
 export const moduleLoadErrors: Map<string, string> = new Map()
 export const moduleRegisteredTools: Map<string, Set<string>> = new Map()
+export const moduleSelection: Map<string, 'active' | 'not-selected' | 'overridden' | 'ambiguous'> = new Map()
 export function moduleLoadKey(mod: Pick<DiscoveredModule, 'scope' | 'spaceName' | 'modulePath'>): string {
   return JSON.stringify([mod.scope, mod.spaceName ?? '', path.resolve(mod.modulePath)])
 }
@@ -194,14 +195,45 @@ export async function loadModuleTools(
   const tools: RegisteredModuleTool[] = []
   moduleLoadErrors.clear()
   moduleRegisteredTools.clear()
+  moduleSelection.clear()
   const registrationKeys = new Map<RegisteredModuleTool, string>()
   let invalidNames = 0
   const spaces = storage.mode === 'full' ? readSpaceCatalog(storage.basePath) : []
   const primary = personalSpace(spaces)
+  const selected = storage.moduleSpace === undefined ? primary
+    : spaces.find(space => space.name === storage.moduleSpace)
+  const scopedNames = storage.scopedModuleNames === true
+  const rank = (mod: DiscoveredModule): number => mod.scope === 'global' ? 2
+    : mod.spaceName === selected?.name && mod.spacePath === selected?.rootPath ? 0
+    : mod.spaceName === primary?.name && mod.spacePath === primary?.rootPath ? 1 : Infinity
+  const best = new Map<string, number>()
+  const peers = new Map<string, number>()
+  if (!scopedNames && selected) {
+    for (const mod of modules) {
+      const tier = rank(mod)
+      if (!Number.isFinite(tier)) continue
+      const previous = best.get(mod.name) ?? Infinity
+      if (tier < previous) { best.set(mod.name, tier); peers.set(mod.name, 1) }
+      else if (tier === previous) peers.set(mod.name, (peers.get(mod.name) ?? 0) + 1)
+    }
+  }
 
   for (const mod of modules) {
     const key = moduleLoadKey(mod)
     moduleRegisteredTools.set(key, new Set())
+    if (!scopedNames && selected) {
+      const tier = rank(mod)
+      if (!Number.isFinite(tier) || tier !== best.get(mod.name)) {
+        moduleSelection.set(key, Number.isFinite(tier) ? 'overridden' : 'not-selected')
+        continue
+      }
+      if (peers.get(mod.name) !== 1) {
+        moduleSelection.set(key, 'ambiguous')
+        moduleLoadErrors.set(key, 'ambiguous-module-selection')
+        continue
+      }
+    }
+    moduleSelection.set(key, 'active')
     // Manifest names are path components as well as identifiers. Validate
     // before constructing data paths or importing a module's handlers.
     if (!validModuleName(mod.name)
@@ -213,7 +245,7 @@ export async function loadModuleTools(
     const declaredTools = mod.manifest.provides?.tools
     if (!Array.isArray(declaredTools) || declaredTools.length === 0) continue
 
-    const destination = mod.scope === 'space'
+    const destination = !scopedNames ? selected : mod.scope === 'space'
       ? spaces.find(s => s.name === mod.spaceName && s.rootPath === mod.spacePath)
       : primary
     if (!destination) {
@@ -239,7 +271,7 @@ export async function loadModuleTools(
         storage,
         modulePath: mod.modulePath,
         dataPath,
-        spaceName: mod.spaceName,
+        spaceName: destination.name,
       }
 
       for (const toolDef of moduleTools) {
@@ -258,7 +290,7 @@ export async function loadModuleTools(
         // A personal/team module must never shadow another data destination
         // through the server's name-only dispatch. Global names stay stable.
         const namespace = mod.name.replace('/', '-')
-        const prefix = mod.scope === 'space'
+        const prefix = scopedNames && mod.scope === 'space'
           ? `datacore_${mod.spaceName}_${namespace}`
           : `datacore_${namespace}`
         const fullName = `${prefix}_${toolDef.name}`

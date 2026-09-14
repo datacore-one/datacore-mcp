@@ -24,6 +24,8 @@ export interface StorageConfig {
   knowledgePath: string | null
   spaces: SpacePaths[]
   catalogToken?: string
+  moduleSpace?: string
+  scopedModuleNames?: boolean
   packsPath: string
   schemasPath: string
   exchangeInboxPath: string
@@ -70,6 +72,14 @@ function fullConfig(basePath: string): StorageConfig {
   basePath = fs.realpathSync(basePath)
   const spaces = readSpaceCatalog(basePath)
   const primary = personalSpace(spaces)
+  const moduleSpace = process.env.DATACORE_SPACE
+  if (moduleSpace !== undefined && !spaces.some(space => space.name === moduleSpace)) {
+    throw new Error('DATACORE_SPACE must identify one existing canonical space')
+  }
+  const scopedNames = process.env.DATACORE_SCOPED_MODULE_NAMES
+  if (scopedNames !== undefined && !['0', '1'].includes(scopedNames)) {
+    throw new Error('DATACORE_SCOPED_MODULE_NAMES must be 0 or 1')
+  }
   return {
     mode: 'full',
     basePath,
@@ -78,6 +88,8 @@ function fullConfig(basePath: string): StorageConfig {
     knowledgePath: primary?.knowledgePath ?? null,
     spaces,
     catalogToken: JSON.stringify(spaces),
+    moduleSpace,
+    scopedModuleNames: scopedNames === '1',
     packsPath: path.join(basePath, '.datacore', 'learning', 'packs'),
     schemasPath: path.join(basePath, '.datacore', 'learning', 'schemas.yaml'),
     exchangeInboxPath: path.join(basePath, '.datacore', 'learning', 'exchange', 'inbox'),

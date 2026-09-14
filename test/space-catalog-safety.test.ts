@@ -12,6 +12,7 @@ let root: string
 beforeEach(() => {
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'datacore-space-catalog-')))
   fs.mkdirSync(path.join(root, '.datacore'))
+  vi.stubEnv('DATACORE_SCOPED_MODULE_NAMES', '1')
   vi.stubEnv('DATACORE_PATH', root)
   vi.stubEnv('DATACORE_CORE_PATH', undefined)
 })
@@ -59,7 +60,7 @@ it('routes renamed personal and nested module data to their actual canonical pat
   const storage = detectStorage()
   const tools = await loadModuleTools(discoverModules(storage), storage)
   expect(tools.map(t => t.fullName).sort()).toEqual(['datacore_client_fixture_identify', 'datacore_fixture_identify'])
-  expect(tools.find(t => t.fullName === 'datacore_fixture_identify')?.context.dataPath).toBe(path.join(root, 'named-self/.datacore/module-data/fixture/data'))
+  expect(tools.find(t => t.fullName === 'datacore_fixture_identify')?.context.dataPath).toBe(path.join(root, 'named-self/.datacore/modules/fixture/data'))
   expect(tools.find(t => t.fullName === 'datacore_client_fixture_identify')?.context.dataPath).toBe(path.join(root, 'group/nested/.datacore/module-data/fixture/data'))
   const captured = await handleCapture({ type: 'journal', content: 'private' }, storage)
   expect(captured.success).toBe(true)

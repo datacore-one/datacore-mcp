@@ -29,10 +29,14 @@ function install(scopes: string[]) {
       'inputSchema: {type: "object", properties: {}}, ' +
       'handler: async (_args, context) => ({ dataPath: context.dataPath }) }];\n')
   }
-  return { mode: 'full', basePath: root } as StorageConfig
+  return { mode: 'full', basePath: root, scopedModuleNames: true } as StorageConfig
 }
 
-describe('module routing is unambiguous', () => {
+function scopesDataDirectory(first: string, space: string | undefined) {
+  return space === 'team' || first === '0-personal' ? '.datacore/module-data' : '.datacore/modules'
+}
+
+describe('opt-in scoped module routing is unambiguous', () => {
   it.each([['', '1-team'], ['0-personal', '1-team']])(
     'does not expose the same callable name for %s and %s', async (first, second) => {
       const storage = install([first, second])
@@ -45,7 +49,8 @@ describe('module routing is unambiguous', () => {
       for (const tool of tools) {
         const response = await tool.definition.handler({}, tool.context) as { dataPath: string }
         expect(response.dataPath).toBe(path.join(storage.basePath,
-          tool.context.spaceName === 'team' ? '1-team' : '0-personal', '.datacore/module-data/fixture/data'))
+          tool.context.spaceName === 'team' ? '1-team' : '0-personal',
+          scopesDataDirectory(first, tool.context.spaceName) + '/fixture/data'))
       }
     },
   )
@@ -81,7 +86,7 @@ describe('module routing is unambiguous', () => {
     const tools = await loadModuleTools(modules, storage)
     expect(tools.map(tool => tool.fullName)).toEqual(['datacore_acme-fixture_identify'])
     expect(tools[0].context.dataPath).toBe(path.join(storage.basePath,
-      '0-personal/.datacore/module-data/acme/fixture/data'))
+      '0-personal/.datacore/modules/acme/fixture/data'))
   })
 
   it.each(['../fixture', '/fixture', 'acme/../fixture', 'fixture.name', '', 12])(

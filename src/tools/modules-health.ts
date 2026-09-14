@@ -1,7 +1,7 @@
 // src/tools/modules-health.ts
 import * as fs from 'fs'
 import * as path from 'path'
-import { discoverModules, moduleLoadErrors, moduleLoadKey, moduleRegisteredTools, type DiscoveredModule } from '../modules.js'
+import { discoverModules, moduleLoadErrors, moduleLoadKey, moduleRegisteredTools, moduleSelection, type DiscoveredModule } from '../modules.js'
 import type { StorageConfig } from '../storage.js'
 
 export interface HealthIssue {
@@ -18,6 +18,7 @@ interface HealthCheck {
   status: 'ok' | 'warning' | 'error'
   symlink?: { target: string } | null
   issues: HealthIssue[]
+  selection?: string
 }
 
 export async function handleModulesHealth(
@@ -55,6 +56,12 @@ async function checkModule(
 ): Promise<HealthCheck> {
   const issues: HealthIssue[] = []
   const manifest = mod.manifest as unknown as Record<string, unknown>
+  const selection = moduleSelection.get(moduleLoadKey(mod))
+  if (selection === 'not-selected' || selection === 'overridden') {
+    return { name: mod.name, scope: mod.scope, space: mod.spaceName ?? null,
+      status: 'warning', selection, issues: [{ severity: 'warning', code: 'MODULE_NOT_SELECTED',
+        message: 'This module is outside the selected module context or overridden by a more specific installation.' }] }
+  }
 
   // Surface any tool load failure recorded at server startup
   const startupLoadError = moduleLoadErrors.get(moduleLoadKey(mod))
@@ -198,5 +205,6 @@ async function checkModule(
     status: hasErrors ? 'error' : hasWarnings ? 'warning' : 'ok',
     symlink: mod.isSymlink ? { target: mod.realPath } : null,
     issues,
+    selection,
   }
 }

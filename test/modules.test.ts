@@ -226,14 +226,14 @@ describe('loadModuleTools', () => {
     `)
 
     const modules = discoverModules(makeStorage(tmpDir))
-    const tools = await loadModuleTools(modules, makeStorage(tmpDir))
+    const tools = await loadModuleTools(modules, { ...makeStorage(tmpDir), moduleSpace: 'team' })
 
     expect(tools).toHaveLength(1)
     expect(tools[0].context.dataPath).toBe(
       path.join(tmpDir, '1-team', '.datacore', 'module-data', 'crm', 'data')
     )
     expect(tools[0].context.spaceName).toBe('team')
-    expect(tools[0].fullName).toBe('datacore_team_crm_lookup')
+    expect(tools[0].fullName).toBe('datacore_crm_lookup')
   })
 })
 
