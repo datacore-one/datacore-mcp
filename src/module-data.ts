@@ -15,13 +15,21 @@ function exists(pathname: string): boolean {
   }
 }
 
-export function moduleDataPath(spaceRoot: string, name: string, installedCode: string, spaceName: string): string {
+export function moduleDataPath(spaceRoot: string, name: string, installedCode: string, spaceName: string, scope?: 'global' | 'space'): string {
   if (!validModuleName(name)) throw new Error('Invalid module identifier')
   const root = fs.realpathSync(spaceRoot)
   const legacy = path.join(root, '.datacore/modules', name)
-  // Both historical layouts are relevant: globally misplaced code/data and
-  // the old scope-specific context destination. Never hide either with a new
-  // empty store. Migration is an explicit, quiescent deployment operation.
+  // Global-scope modules (shared across the installation) and third-party namespaced
+  // modules use the legacy .datacore/modules/ path. This preserves data for pre-migration
+  // installations and keeps third-party module state out of the private module-data store.
+  if (scope === 'global' || name.includes('/')) {
+    for (const component of ['data', 'state', 'settings.local.yaml']) {
+      if (exists(path.join(installedCode, component))) throw new Error('Legacy module state requires verified migration')
+    }
+    return directoryWithin(root, path.join(legacy, 'data'))
+  }
+  // Space-scoped modules: both the legacy path and the installed code directory
+  // must be free of mutable state before the private store can be created.
   for (const candidate of new Set([legacy, installedCode])) {
     if (exists(candidate)) fs.realpathSync(candidate)
     for (const component of ['data', 'state', 'settings.local.yaml']) {

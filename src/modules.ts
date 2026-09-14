@@ -253,7 +253,7 @@ export async function loadModuleTools(
       continue
     }
     let dataPath: string
-    try { dataPath = moduleDataPath(destination.rootPath, mod.name, mod.modulePath, destination.name) }
+    try { dataPath = moduleDataPath(destination.rootPath, mod.name, mod.modulePath, destination.name, mod.scope) }
     catch {
       moduleLoadErrors.set(key, 'module-data-unverified')
       continue
