@@ -1,29 +1,48 @@
-/** Python and MCP share the same preservation-first module data resolver. */
+/** Private mutable module state must never be rooted in installed code. */
+import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { execFileSync } from 'node:child_process'
-import { findPython } from './runtime-python.js'
+import { directoryWithin } from './durable-files.js'
+import { readTextWithin } from './safe-read.js'
 
 export function validModuleName(name: unknown): name is string {
   return typeof name === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/.test(name)
 }
 
+function exists(pathname: string): boolean {
+  try { fs.lstatSync(pathname); return true } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+}
+
 export function moduleDataPath(spaceRoot: string, name: string, installedCode: string, spaceName: string): string {
   if (!validModuleName(name)) throw new Error('Invalid module identifier')
-  const python = findPython()
-  const library = process.env.DATACORE_LIB
-    ?? path.join(process.env.DATACORE_PATH ?? spaceRoot, '.datacore/lib')
-  if (!python || !path.isAbsolute(library)) throw new Error('Installed module data resolver is unavailable')
-  try {
-    const result = JSON.parse(execFileSync(python, ['-I', path.join(library, 'module_context.py'),
-      '--space-root', spaceRoot, '--space-name', spaceName, '--module', name, '--code', installedCode], {
-      encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }))
-    const relative = typeof result.data_path === 'string' ? path.relative(spaceRoot, result.data_path) : '..'
-    if (result.version !== 1 || !relative || relative === '..' || relative.startsWith(`..${path.sep}`)
-      || path.isAbsolute(relative) || !path.isAbsolute(result.data_path)) throw new Error()
-    return result.data_path
-  } catch {
-    throw new Error('Module data requires private, unambiguous storage or preserved migration')
+  const root = fs.realpathSync(spaceRoot)
+  const legacy = path.join(root, '.datacore/modules', name)
+  // Both historical layouts are relevant: globally misplaced code/data and
+  // the old scope-specific context destination. Never hide either with a new
+  // empty store. Migration is an explicit, quiescent deployment operation.
+  for (const candidate of new Set([legacy, installedCode])) {
+    if (exists(candidate)) fs.realpathSync(candidate)
+    for (const component of ['data', 'state', 'settings.local.yaml']) {
+      if (exists(path.join(candidate, component))) throw new Error('Legacy module state requires verified migration')
+    }
   }
+  const privateRoot = directoryWithin(root, path.join(root, '.datacore/module-data', name))
+  let current = path.join(root, '.datacore/module-data')
+  for (const component of ['', ...name.split('/')]) {
+    current = path.join(current, component)
+    const info = fs.statSync(current)
+    if ((info.mode & 0o077) !== 0 || (process.getuid && info.uid !== process.getuid())) {
+      throw new Error('Module state is not private to this runtime identity')
+    }
+  }
+  const receipt = readTextWithin(root, path.join(privateRoot, '.migration.json'))
+  if (receipt !== null) {
+    const migration = JSON.parse(receipt)
+    if (migration?.version !== 1 || migration?.status !== 'complete' || migration?.module !== name || migration?.space !== spaceName) {
+      throw new Error('Module migration is incomplete')
+    }
+  }
+  return directoryWithin(root, path.join(privateRoot, 'data'))
 }
