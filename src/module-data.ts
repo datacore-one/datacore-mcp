@@ -19,26 +19,14 @@ export function moduleDataPath(spaceRoot: string, name: string, installedCode: s
   if (!validModuleName(name)) throw new Error('Invalid module identifier')
   const root = fs.realpathSync(spaceRoot)
   const legacy = path.join(root, '.datacore/modules', name)
-  // Global-scope and third-party namespaced modules. Installed code must not hold
-  // mutable state. Existing legacy data at the primary space root is preserved;
-  // fresh installs use the private module-data store.
+  // Global-scope and third-party namespaced modules: data lives in the space
+  // under the legacy convention (<space>/.datacore/modules/<name>/data), safe
+  // because the space repo is private to the team that owns it.
   if (scope === 'global' || name.includes('/')) {
     for (const component of ['data', 'state', 'settings.local.yaml']) {
       if (exists(path.join(installedCode, component))) throw new Error('Legacy module state requires verified migration')
     }
-    const globalPrivate = path.join(root, '.datacore/module-data', name)
-    const receiptText = readTextWithin(root, path.join(globalPrivate, '.migration.json'))
-    if (receiptText !== null) {
-      const migration = JSON.parse(receiptText)
-      if (migration?.version === 1 && migration?.status === 'complete' && migration?.module === name) {
-        return directoryWithin(root, path.join(globalPrivate, 'data'))
-      }
-    }
-    if (exists(path.join(legacy, 'data'))) {
-      try { return directoryWithin(root, path.join(legacy, 'data')) }
-      catch { /* legacy path resolves outside store root — fall through to module-data */ }
-    }
-    return directoryWithin(root, path.join(globalPrivate, 'data'))
+    return directoryWithin(root, path.join(legacy, 'data'))
   }
   // Space-scoped modules: both the legacy path and the installed code directory
   // must be free of mutable state before the private store can be created.
