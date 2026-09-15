@@ -253,9 +253,12 @@ export async function loadModuleTools(
       continue
     }
     let dataPath: string
-    try { dataPath = moduleDataPath(destination.rootPath, mod.name, mod.modulePath, destination.name, mod.scope) }
-    catch {
-      moduleLoadErrors.set(key, 'module-data-unverified')
+    try { dataPath = moduleDataPath(destination.rootPath, mod.name, mod.modulePath, destination.name) }
+    catch (error) {
+      // Say which store could not be established. A bare category sent every
+      // operator to the wrong place: an unmigrated legacy directory and an
+      // aliased store both read as 'module-data-unverified'.
+      moduleLoadErrors.set(key, `module-data-unverified: ${(error as Error).message}`)
       continue
     }
 
