@@ -35,16 +35,14 @@ export function moduleDataPath(spaceRoot: string, name: string, installedCode: s
         return directoryWithin(root, path.join(globalPrivate, 'data'))
       }
     }
-    // Use legacy path only if data already exists there (backward compat).
-    // New installations and symlinked provider-code both fall through to module-data.
-    if (exists(path.join(legacy, 'data'))) {
-      try {
-        return directoryWithin(root, path.join(legacy, 'data'))
-      } catch {
-        // Legacy path is a symlink resolving outside store root — use module-data.
-      }
+    // Global and third-party modules default to the legacy .datacore/modules/ path.
+    // Only fall back to module-data if the legacy path resolves outside the store root.
+    try {
+      return directoryWithin(root, path.join(legacy, 'data'))
+    } catch {
+      // Legacy path is a symlink resolving outside store root — use module-data.
+      return directoryWithin(root, path.join(globalPrivate, 'data'))
     }
-    return directoryWithin(root, path.join(globalPrivate, 'data'))
   }
   // Space-scoped modules: both the legacy path and the installed code directory
   // must be free of mutable state before the private store can be created.

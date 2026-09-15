@@ -14,6 +14,7 @@ const transport = new StdioClientTransport({
   args: [fileURLToPath(new URL('../dist/index.js', import.meta.url))],
   env: { PATH: process.env.PATH ?? '', HOME: root,
     DATACORE_PATH: root, DATACORE_ROOT: root,
+    DATACORE_SCOPED_MODULE_NAMES: '1',
     ...(process.env.DATACORE_LIB ? {DATACORE_LIB: process.env.DATACORE_LIB} : {}),
     ...(process.env.DATACORE_PYTHON ? {DATACORE_PYTHON: process.env.DATACORE_PYTHON} : {}) },
   stderr: 'pipe',
