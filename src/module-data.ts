@@ -20,13 +20,26 @@ export function moduleDataPath(spaceRoot: string, name: string, installedCode: s
   const root = fs.realpathSync(spaceRoot)
   const legacy = path.join(root, '.datacore/modules', name)
   // Global-scope modules (shared across the installation) and third-party namespaced
-  // modules use the legacy .datacore/modules/ path. This preserves data for pre-migration
-  // installations and keeps third-party module state out of the private module-data store.
+  // modules default to the legacy .datacore/modules/ path. A complete migration receipt
+  // promotes them to the private module-data store. If the legacy path is a symlink
+  // resolving outside the store root (provider-code pattern), fall back to module-data.
   if (scope === 'global' || name.includes('/')) {
     for (const component of ['data', 'state', 'settings.local.yaml']) {
       if (exists(path.join(installedCode, component))) throw new Error('Legacy module state requires verified migration')
     }
-    return directoryWithin(root, path.join(legacy, 'data'))
+    const globalPrivate = path.join(root, '.datacore/module-data', name)
+    const receiptText = readTextWithin(root, path.join(globalPrivate, '.migration.json'))
+    if (receiptText !== null) {
+      const migration = JSON.parse(receiptText)
+      if (migration?.version === 1 && migration?.status === 'complete' && migration?.module === name) {
+        return directoryWithin(root, path.join(globalPrivate, 'data'))
+      }
+    }
+    try {
+      return directoryWithin(root, path.join(legacy, 'data'))
+    } catch {
+      return directoryWithin(root, path.join(globalPrivate, 'data'))
+    }
   }
   // Space-scoped modules: both the legacy path and the installed code directory
   // must be free of mutable state before the private store can be created.

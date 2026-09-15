@@ -271,7 +271,7 @@ export async function loadModuleTools(
         storage,
         modulePath: mod.modulePath,
         dataPath,
-        spaceName: destination.name,
+        spaceName: mod.scope === 'global' ? undefined : destination.name,
       }
 
       for (const toolDef of moduleTools) {
