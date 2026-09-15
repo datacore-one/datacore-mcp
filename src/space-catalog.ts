@@ -50,5 +50,14 @@ export function personalSpace(spaces: CatalogSpace[]): CatalogSpace | null {
   // Legacy identity is permitted only for a canonical unmarked personal space.
   // An explicit team marker always overrides a directory's historical name.
   const candidates = spaces.filter(s => s.type === 'personal' || (!s.marked && s.name === 'personal'))
-  return candidates.length === 1 ? candidates[0] : null
+  if (candidates.length === 1) return candidates[0]
+  // More than one space may legitimately be typed personal -- an installation
+  // can hold a main personal space and, say, a practice one. That is precedence
+  // to apply, not ambiguity to refuse: the documented order is
+  // selected-space > personal > global, so the space actually named `personal`
+  // wins. Returning null here instead disabled journal, capture and ingest
+  // outright, reporting 0 entries and 0 notes on an installation holding
+  // thousands.
+  const named = candidates.filter(s => s.name === 'personal')
+  return named.length === 1 ? named[0] : null
 }
