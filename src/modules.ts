@@ -4,7 +4,11 @@ import * as path from 'path'
 import * as yaml from 'js-yaml'
 import { z } from 'zod'
 import { logger } from './logger.js'
+import { toJsonSchema } from './schema.js'
 import type { StorageConfig } from './storage.js'
+import { readSpaceCatalog, personalSpace } from './space-catalog.js'
+import { pathToFileURL } from 'node:url'
+import { moduleDataPath, validModuleName } from './module-data.js'
 
 export interface ModuleToolDefinition {
   name: string              // Without namespace prefix (e.g., 'inbox_count')
@@ -69,10 +73,11 @@ export interface DiscoveredModule {
   isSymlink: boolean        // True when the entry in .datacore/modules/ is a symlink
   scope: 'global' | 'space'
   spaceName?: string
+  spacePath?: string
 }
 
 export interface RegisteredModuleTool {
-  fullName: string          // datacore_[module]_[tool]
+  fullName: string          // datacore_[space_]module_tool
   moduleName: string
   definition: ModuleToolDefinition
   context: ModuleToolContext
@@ -80,10 +85,15 @@ export interface RegisteredModuleTool {
 
 /**
  * Tracks modules whose tools/index.js failed to load at server startup.
- * Keyed by module name; value is the error message.
+ * Keyed by installed module context; values contain categories, never exceptions.
  * Consumed by handleModulesHealth to surface startup failures.
  */
 export const moduleLoadErrors: Map<string, string> = new Map()
+export const moduleRegisteredTools: Map<string, Set<string>> = new Map()
+export const moduleSelection: Map<string, 'active' | 'not-selected' | 'overridden' | 'ambiguous'> = new Map()
+export function moduleLoadKey(mod: Pick<DiscoveredModule, 'scope' | 'spaceName' | 'modulePath'>): string {
+  return JSON.stringify([mod.scope, mod.spaceName ?? '', path.resolve(mod.modulePath)])
+}
 
 /**
  * Discover all installed modules by scanning module directories.
@@ -98,17 +108,12 @@ export function discoverModules(storage: StorageConfig): DiscoveredModule[] {
   const globalModulesDir = path.join(storage.basePath, '.datacore', 'modules')
   modules.push(...scanModulesDir(globalModulesDir, 'global'))
 
-  // 2. Space modules: basePath/[0-9]-*//.datacore/modules/*/
-  try {
-    const entries = fs.readdirSync(storage.basePath)
-    for (const entry of entries) {
-      if (/^\d+-/.test(entry)) {
-        const spaceModulesDir = path.join(storage.basePath, entry, '.datacore', 'modules')
-        modules.push(...scanModulesDir(spaceModulesDir, 'space', entry))
-      }
-    }
-  } catch {
-    // basePath not readable — skip space scan
+  // The installed core catalog is authoritative for every consumer.
+  // A root space shares the global code directory and is scanned only once.
+  for (const space of readSpaceCatalog(storage.basePath)) {
+    if (space.rootPath === fs.realpathSync(storage.basePath)) continue
+    modules.push(...scanModulesDir(path.join(space.rootPath, '.datacore/modules'),
+      'space', space.name, space.rootPath))
   }
 
   return modules
@@ -118,6 +123,7 @@ function scanModulesDir(
   modulesDir: string,
   scope: 'global' | 'space',
   spaceName?: string,
+  spacePath?: string,
 ): DiscoveredModule[] {
   const modules: DiscoveredModule[] = []
 
@@ -160,6 +166,7 @@ function scanModulesDir(
           isSymlink,
           scope,
           spaceName,
+          spacePath,
         })
       } catch {
         // Invalid YAML or missing name — skip
@@ -175,7 +182,7 @@ function scanModulesDir(
 /**
  * Load module tools from discovered modules.
  * Only loads tools from modules that declare provides.tools in module.yaml
- * and have a valid tools/index.ts (compiled to .js) handler.
+ * and ship tools/index.js (authored JavaScript or compiled TypeScript).
  *
  * Returns registered tools ready for MCP server integration.
  * Load failures are logged as warnings and recorded in moduleLoadErrors.
@@ -183,53 +190,153 @@ function scanModulesDir(
 export async function loadModuleTools(
   modules: DiscoveredModule[],
   storage: StorageConfig,
+  reservedNames: readonly string[] = [],
 ): Promise<RegisteredModuleTool[]> {
   const tools: RegisteredModuleTool[] = []
+  moduleLoadErrors.clear()
+  moduleRegisteredTools.clear()
+  moduleSelection.clear()
+  const registrationKeys = new Map<RegisteredModuleTool, string>()
+  let invalidNames = 0
+  const spaces = storage.mode === 'full' ? readSpaceCatalog(storage.basePath) : []
+  const primary = personalSpace(spaces)
+  const selected = storage.moduleSpace === undefined ? primary
+    : spaces.find(space => space.name === storage.moduleSpace)
+  const scopedNames = storage.scopedModuleNames === true
+  const rank = (mod: DiscoveredModule): number => mod.scope === 'global' ? 2
+    : mod.spaceName === selected?.name && mod.spacePath === selected?.rootPath ? 0
+    : mod.spaceName === primary?.name && mod.spacePath === primary?.rootPath ? 1 : Infinity
+  const best = new Map<string, number>()
+  const peers = new Map<string, number>()
+  if (!scopedNames && selected) {
+    for (const mod of modules) {
+      const tier = rank(mod)
+      if (!Number.isFinite(tier)) continue
+      const previous = best.get(mod.name) ?? Infinity
+      if (tier < previous) { best.set(mod.name, tier); peers.set(mod.name, 1) }
+      else if (tier === previous) peers.set(mod.name, (peers.get(mod.name) ?? 0) + 1)
+    }
+  }
 
   for (const mod of modules) {
+    const key = moduleLoadKey(mod)
+    moduleRegisteredTools.set(key, new Set())
+    if (!scopedNames && selected) {
+      const tier = rank(mod)
+      if (!Number.isFinite(tier) || tier !== best.get(mod.name)) {
+        moduleSelection.set(key, Number.isFinite(tier) ? 'overridden' : 'not-selected')
+        continue
+      }
+      if (peers.get(mod.name) !== 1) {
+        moduleSelection.set(key, 'ambiguous')
+        moduleLoadErrors.set(key, 'ambiguous-module-selection')
+        continue
+      }
+    }
+    moduleSelection.set(key, 'active')
+    // Manifest names are path components as well as identifiers. Validate
+    // before constructing data paths or importing a module's handlers.
+    if (!validModuleName(mod.name)
+      || (mod.scope === 'space' && (typeof mod.spaceName !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(mod.spaceName)))) {
+      invalidNames++
+      moduleLoadErrors.set(key, 'invalid-identifier')
+      continue
+    }
     const declaredTools = mod.manifest.provides?.tools
-    if (!declaredTools || declaredTools.length === 0) continue
+    if (!Array.isArray(declaredTools) || declaredTools.length === 0) continue
 
-    // Try to load the tools/index.ts (compiled to .js)
+    const destination = !scopedNames ? selected : mod.scope === 'space'
+      ? spaces.find(s => s.name === mod.spaceName && s.rootPath === mod.spacePath)
+      : primary
+    if (!destination) {
+      moduleLoadErrors.set(key, 'data-scope-unverified')
+      continue
+    }
+    let dataPath: string
+    try { dataPath = moduleDataPath(destination.rootPath, mod.name, mod.modulePath, destination.name) }
+    catch (error) {
+      // Say which store could not be established. A bare category sent every
+      // operator to the wrong place: an unmigrated legacy directory and an
+      // aliased store both read as 'module-data-unverified'.
+      moduleLoadErrors.set(key, `module-data-unverified: ${(error as Error).message}`)
+      continue
+    }
+
+    // JavaScript is the runtime artifact; no compiler runs during discovery.
     const toolsIndexPath = path.join(mod.modulePath, 'tools', 'index.js')
     if (!fs.existsSync(toolsIndexPath)) continue
 
     try {
-      const toolsModule = await import(toolsIndexPath)
+      const toolsModule = await import(pathToFileURL(toolsIndexPath).href)
       const moduleTools: ModuleToolDefinition[] = toolsModule.tools || toolsModule.default?.tools || []
-
-      // Build data path for this module's private data
-      const dataPath = mod.scope === 'space' && mod.spaceName
-        ? path.join(storage.basePath, mod.spaceName, '.datacore', 'modules', mod.name, 'data')
-        : path.join(storage.basePath, '0-personal', '.datacore', 'modules', mod.name, 'data')
 
       const context: ModuleToolContext = {
         storage,
         modulePath: mod.modulePath,
         dataPath,
-        spaceName: mod.spaceName,
+        spaceName: (mod.scope === 'global' && scopedNames) ? undefined : destination.name,
       }
 
       for (const toolDef of moduleTools) {
         // Only register tools declared in module.yaml
-        const declared = declaredTools.find(d => d.name === toolDef.name)
+        const declared = declaredTools.find(d => d?.name === toolDef?.name)
         if (!declared) continue
+        try {
+          toJsonSchema(toolDef.inputSchema)
+          if (typeof toolDef.handler !== 'function') throw new Error('invalid handler')
+        } catch {
+          moduleLoadErrors.set(key, 'invalid-tool-definition')
+          continue
+        }
 
-        tools.push({
-          fullName: `datacore_${mod.name}_${toolDef.name}`,
+        // Scope is part of callable identity, not just hidden handler state.
+        // A personal/team module must never shadow another data destination
+        // through the server's name-only dispatch. Global names stay stable.
+        const namespace = mod.name.replace('/', '-')
+        const prefix = scopedNames && mod.scope === 'space'
+          ? `datacore_${mod.spaceName}_${namespace}`
+          : `datacore_${namespace}`
+        const fullName = `${prefix}_${toolDef.name}`
+        if (typeof toolDef.name !== 'string' || !/^[a-z0-9_]+$/.test(toolDef.name)
+          || !/^[a-zA-Z0-9_-]{1,64}$/.test(fullName)) {
+          invalidNames++
+          continue
+        }
+        const registered = {
+          fullName,
           moduleName: mod.name,
           definition: toolDef,
           context,
-        })
+        }
+        tools.push(registered)
+        registrationKeys.set(registered, key)
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      logger.warning(`Module '${mod.name}' tools failed to load at startup: ${message}`)
-      moduleLoadErrors.set(mod.name, message)
+      const code = (err as NodeJS.ErrnoException | null)?.code
+      const category = code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND'
+        ? 'dependency-unavailable' : 'import-failed'
+      logger.warning(`Module '${mod.name}' tools failed to load (${category}).`)
+      moduleLoadErrors.set(key, category)
     }
   }
 
-  return tools
+  if (invalidNames) {
+    console.error(`Datacore refused ${invalidNames} invalid module/tool identifier(s).`)
+  }
+
+  const counts = new Map<string, number>()
+  for (const name of reservedNames) counts.set(name, 1)
+  for (const tool of tools) counts.set(tool.fullName, (counts.get(tool.fullName) ?? 0) + 1)
+  // Malformed or duplicate manifests can still construct a collision. Refuse
+  // every colliding candidate, preserving unrelated tools and core discovery.
+  // Choosing the first/last would make installation order a routing decision.
+  const ambiguous = new Set([...counts].filter(([, count]) => count > 1).map(([name]) => name))
+  if (ambiguous.size) {
+    console.error(`Datacore refused ${ambiguous.size} ambiguous module tool name(s); reconcile duplicate manifests.`)
+  }
+  const registered = tools.filter(tool => !ambiguous.has(tool.fullName))
+  for (const tool of registered) moduleRegisteredTools.get(registrationKeys.get(tool)!)!.add(tool.definition.name)
+  return registered
 }
 
 /**

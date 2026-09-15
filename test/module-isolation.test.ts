@@ -43,6 +43,7 @@ function makeInstall(schemaLiteral: string): string {
       `}]\nexport default { tools }\n`,
   )
   fs.mkdirSync(path.join(root, 'journal'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.datacore/config.yaml'), 'space: {name: personal, type: personal}\n')
   return root
 }
 

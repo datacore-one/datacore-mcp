@@ -6,8 +6,8 @@ import {
   ListResourceTemplatesRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { localDate } from './tools/capture.js'
-import type { StorageConfig } from './storage.js'
-import * as fs from 'fs'
+import { assertStorageCurrent, type StorageConfig } from './storage.js'
+import { readTextWithin } from './safe-read.js'
 import * as path from 'path'
 import { currentVersion } from './version.js'
 
@@ -50,6 +50,7 @@ export function registerResources(server: Server, storage: StorageConfig): void 
 
   // Read resource
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    assertStorageCurrent(storage)
     const uri = request.params.uri
 
     // Static: datacore://status
@@ -78,11 +79,15 @@ export function registerResources(server: Server, storage: StorageConfig): void 
     const journalMatch = uri.match(/^datacore:\/\/journal\/(.+)$/)
     if (journalMatch) {
       const dateStr = journalMatch[1] === 'today' ? localDate().date : journalMatch[1]
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !Number.isFinite(Date.parse(dateStr))
+        || new Date(dateStr).toISOString().slice(0, 10) !== dateStr) throw new Error('Invalid journal date')
+      if (!storage.journalPath) throw new Error('No unambiguous personal journal is configured')
       const filePath = path.join(storage.journalPath, `${dateStr}.md`)
-      if (!fs.existsSync(filePath)) {
+      const text = readTextWithin(storage.basePath, filePath)
+      if (text === null) {
         return { contents: [{ uri, mimeType: 'text/markdown', text: `No journal entry for ${dateStr}` }] }
       }
-      return { contents: [{ uri, mimeType: 'text/markdown', text: fs.readFileSync(filePath, 'utf8') }] }
+      return { contents: [{ uri, mimeType: 'text/markdown', text }] }
     }
 
     throw new Error(`Unknown resource: ${uri}`)

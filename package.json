@@ -15,8 +15,9 @@
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "node scripts/build.mjs",
     "dev": "tsup --watch",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node dist/index.js",
@@ -26,9 +27,12 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "ajv": "8.18.0",
+    "ajv-formats": "3.0.1",
     "better-sqlite3": "^13.0.0",
     "js-yaml": "^5.0.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "zod-to-json-schema": "3.25.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -36,7 +40,7 @@
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
     "typescript": "^7.0.0",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.11"
   },
   "files": [
     "dist",

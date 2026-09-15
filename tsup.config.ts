@@ -5,7 +5,7 @@ export default defineConfig([
     entry: ['src/index.ts'],
     format: ['esm'],
     target: 'node22',
-    clean: true,
+    clean: false, // scripts/build.mjs cleans once before either build starts
     dts: false,
     sourcemap: true,
     external: ['better-sqlite3'],

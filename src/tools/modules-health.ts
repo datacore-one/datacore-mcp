@@ -1,7 +1,7 @@
 // src/tools/modules-health.ts
 import * as fs from 'fs'
 import * as path from 'path'
-import { discoverModules, moduleLoadErrors, type DiscoveredModule } from '../modules.js'
+import { discoverModules, moduleLoadErrors, moduleLoadKey, moduleRegisteredTools, moduleSelection, type DiscoveredModule } from '../modules.js'
 import type { StorageConfig } from '../storage.js'
 
 export interface HealthIssue {
@@ -13,9 +13,12 @@ export interface HealthIssue {
 
 interface HealthCheck {
   name: string
+  scope: 'global' | 'space'
+  space: string | null
   status: 'ok' | 'warning' | 'error'
   symlink?: { target: string } | null
   issues: HealthIssue[]
+  selection?: string
 }
 
 export async function handleModulesHealth(
@@ -26,7 +29,9 @@ export async function handleModulesHealth(
   const modules = cachedModules ?? discoverModules(storage)
 
   if (args.module) {
-    const found = modules.find(m => m.manifest.name === args.module)
+    const matches = modules.filter(m => m.manifest.name === args.module)
+    if (matches.length > 1) return { error: 'Module name is ambiguous across scopes; inspect the complete scoped health report.' }
+    const found = matches[0]
     if (!found) {
       return { error: `Module '${args.module}' not found` }
     }
@@ -51,17 +56,21 @@ async function checkModule(
 ): Promise<HealthCheck> {
   const issues: HealthIssue[] = []
   const manifest = mod.manifest as unknown as Record<string, unknown>
+  const selection = moduleSelection.get(moduleLoadKey(mod))
+  if (selection === 'not-selected' || selection === 'overridden') {
+    return { name: mod.name, scope: mod.scope, space: mod.spaceName ?? null,
+      status: 'warning', selection, issues: [{ severity: 'warning', code: 'MODULE_NOT_SELECTED',
+        message: 'This module is outside the selected module context or overridden by a more specific installation.' }] }
+  }
 
   // Surface any tool load failure recorded at server startup
-  const startupLoadError = moduleLoadErrors.get(mod.name)
+  const startupLoadError = moduleLoadErrors.get(moduleLoadKey(mod))
   if (startupLoadError) {
     issues.push({
       severity: 'error',
       code: 'TOOLS_LOAD_FAILED',
-      message: `Tool load failed at startup: ${startupLoadError}`,
-      hint: startupLoadError.includes('Cannot find package')
-        ? 'Module tool imports a package not available at runtime. See DIP-0028 §3 (bundle the tool) or §4 (use @datacore-one/mcp/runtime).'
-        : 'See DIP-0028 for module tool loading architecture and bundling requirements.',
+      message: `Tool registration failed at startup (${startupLoadError}).`,
+      hint: 'Reconcile the installed module artifact and its declared dependencies, then restart and verify registration.',
     })
   }
 
@@ -103,15 +112,11 @@ async function checkModule(
     }
   }
 
-  // Check declared tools have handlers.
-  // Modules export tools as `export const tools = [{ name, handler }, ...]`
-  // (see crm/tools/index.js, gtd/tools/index.js, etc). We accept either
-  // that array shape or a top-level named export — older modules may
-  // still use the per-name pattern.
+  // Inspect actual startup registration. A health request must not import code
+  // through a second path or equate a named export with a registered tool.
   const provides = manifest.provides as { tools?: Array<{ name: string; handler?: string }> } | undefined
   const declaredTools = provides?.tools || []
   if (declaredTools.length > 0) {
-    // Use realPath for the actual file import to avoid double-resolution with symlinks (DIP-0028 §5)
     const toolsIndex = path.join(mod.realPath, 'tools', 'index.js')
     if (!fs.existsSync(toolsIndex)) {
       issues.push({
@@ -120,36 +125,22 @@ async function checkModule(
         message: `Declares ${declaredTools.length} tools but tools/index.js not found`,
       })
     } else {
-      try {
-        const toolModule = await import(toolsIndex)
-        const arrayTools: Array<{ name: string; handler?: unknown }> =
-          (toolModule.tools as Array<{ name: string; handler?: unknown }>) ??
-          (toolModule.default?.tools as Array<{ name: string; handler?: unknown }>) ??
-          []
-        const exportedNames = new Set(
-          arrayTools.filter(t => typeof t?.handler === 'function').map(t => t.name),
-        )
+      const registered = moduleRegisteredTools.get(moduleLoadKey(mod))
+      if (registered) {
         for (const tool of declaredTools) {
-          const handlerName = tool.handler || tool.name
-          const inArray = exportedNames.has(tool.name)
-          const asNamedExport = typeof toolModule[handlerName] === 'function'
-          if (!inArray && !asNamedExport) {
+          if (!registered.has(tool.name)) {
             issues.push({
               severity: 'warning',
               code: 'TOOL_HANDLER_MISSING',
-              message: `Tool '${tool.name}' declared in module.yaml but no matching handler exported`,
+              message: `Tool '${tool.name}' declared in module.yaml but not registered at startup`,
             })
           }
         }
-      } catch (err) {
-        const detail = err instanceof Error ? err.message : String(err)
+      } else {
         issues.push({
           severity: 'error',
-          code: 'TOOLS_LOAD_FAILED',
-          message: `tools/index.js failed to import: ${detail}`,
-          hint: detail.includes('Cannot find package')
-            ? 'Module tool imports a package not available at runtime. See DIP-0028 §3 (bundle the tool) or §4 (use @datacore-one/mcp/runtime).'
-            : 'See DIP-0028 for module tool loading architecture and bundling requirements.',
+          code: 'TOOLS_NOT_VERIFIED',
+          message: 'No startup registration evidence is available for this module.',
         })
       }
     }
@@ -192,7 +183,7 @@ async function checkModule(
     }
   } catch { /* ignore */ }
 
-  // Symlink-specific checks (DIP-0028 §5)
+  // Symlink status is not proof of dependency availability or bundling.
   if (mod.isSymlink) {
     if (!fs.existsSync(mod.realPath)) {
       // Dangling symlink: target path does not exist (realpathSync may have fallen back to modulePath)
@@ -200,13 +191,6 @@ async function checkModule(
         severity: 'error',
         code: 'SYMLINK_TARGET_MISSING',
         message: `Symlink target does not exist or is inaccessible: ${mod.modulePath}`,
-      })
-    } else if (declaredTools.length > 0 && !isLikelyBundled(path.join(mod.realPath, 'tools', 'index.js'))) {
-      issues.push({
-        severity: 'warning',
-        code: 'SYMLINK_UNBUNDLED_TOOLS',
-        message: 'Symlinked module with unbundled tools — may fail to load on other machines',
-        hint: 'Symlinked modules must use bundled tools/index.js. See DIP-0028 §5.',
       })
     }
   }
@@ -216,18 +200,11 @@ async function checkModule(
 
   return {
     name: mod.name as string,
+    scope: mod.scope,
+    space: mod.spaceName ?? null,
     status: hasErrors ? 'error' : hasWarnings ? 'warning' : 'ok',
     symlink: mod.isSymlink ? { target: mod.realPath } : null,
     issues,
-  }
-}
-
-// Heuristic: a bundled file is typically >20 KB (includes all deps inline)
-function isLikelyBundled(filePath: string): boolean {
-  try {
-    const stat = fs.statSync(filePath)
-    return stat.size > 20_000
-  } catch {
-    return false
+    selection,
   }
 }

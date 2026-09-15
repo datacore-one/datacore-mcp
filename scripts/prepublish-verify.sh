@@ -14,6 +14,8 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+LOG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/dc-mcp-verify.XXXXXX") || exit 1
+trap 'rm -rf -- "$LOG_DIR"' EXIT
 FAIL=0
 step() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
@@ -22,16 +24,16 @@ bad()  { printf '  \033[31m✗ %s\033[0m\n' "$1"; FAIL=1; }
 VERSION=$(node -p "require('./package.json').version")
 printf '\033[1mPre-publish verification — @datacore-one/mcp %s\033[0m\n' "$VERSION"
 
-step "Tests"
-if npm test >/tmp/dc-mcp-test.log 2>&1; then
-  ok "$(grep -Eo 'Tests +[0-9]+ passed' /tmp/dc-mcp-test.log | tail -1)"
-else
-  bad "tests failed:"; grep -E 'FAIL|AssertionError' /tmp/dc-mcp-test.log | head -15
-fi
-
 step "Build"
-if npm run build >/tmp/dc-mcp-build.log 2>&1; then ok "dist/ built"
-else bad "build failed:"; tail -15 /tmp/dc-mcp-build.log; fi
+if npm run build >"$LOG_DIR/build.log" 2>&1; then ok "dist/ built"
+else bad "build failed:"; tail -15 "$LOG_DIR/build.log"; fi
+
+step "Tests"
+if npm test >"$LOG_DIR/test.log" 2>&1; then
+  ok "$(grep -Eo 'Tests +[0-9]+ passed' "$LOG_DIR/test.log" | tail -1)"
+else
+  bad "tests failed:"; tail -100 "$LOG_DIR/test.log"
+fi
 
 step "Built artifact"
 # Exercise the ARTIFACT. The deployed tree on servers has dist/ and no
@@ -52,20 +54,11 @@ fi
 step "MCP protocol handshake"
 # A server that builds and starts can still fail to speak MCP — and an agent
 # discovers that only when its tool calls stop working. Do the handshake here.
-HANDSHAKE=$(printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"gate","version":"1"}}}' \
-  '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-  | timeout 25 node dist/index.js 2>/dev/null)
-if printf '%s' "$HANDSHAKE" | grep -q '"serverInfo"'; then
-  ok "initialize answered"
+if node scripts/protocol-smoke.mjs >"$LOG_DIR/protocol.log" 2>&1; then
+  ok "$(cat "$LOG_DIR/protocol.log")"
 else
-  bad "no initialize response — the server does not speak MCP"
-fi
-TOOLS=$(printf '%s' "$HANDSHAKE" | grep -o '"name":"datacore_[a-z_]*"' | sort -u | wc -l | tr -d ' ')
-if [ "${TOOLS:-0}" -gt 0 ]; then
-  ok "$TOOLS datacore tool(s) advertised"
-else
-  bad "tools/list advertised no datacore tools"
+  bad "isolated protocol verification failed"
+  tail -15 "$LOG_DIR/protocol.log"
 fi
 
 if [ -n "$(git status --porcelain 2>/dev/null)" ]; then

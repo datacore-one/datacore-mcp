@@ -129,6 +129,54 @@ Datacore exposes productivity tools. **Memory — engrams, learning, recall, pac
 
 Tool names use underscores to satisfy the MCP tool-name rule `^[a-zA-Z0-9_-]{1,64}$`. Legacy dot-namespaced names (`datacore.capture`) are still accepted as aliases for backward compatibility.
 
+Managed installations select exactly one absolute `DATACORE_PATH` (existing
+full installation) or `DATACORE_CORE_PATH` (existing or new core store). Invalid
+explicit paths fail without choosing a different store. Leave both unset only
+when the documented HOME-based discovery is intended.
+
+Set absolute `DATACORE_LIB` and `DATACORE_PYTHON` to the qualified core library
+and interpreter. Failed explicit selections do not fall back to mutable data
+code or another Python. Ledger status uses the installed `ledger_health.py`
+version 1 protocol and canonical space discovery. Missing helpers, unreadable
+spaces, busy writers or invalid responses remain unverified and cannot yield
+“System healthy.” Older cores need reconciliation before ledger health can be
+established. Datacortex uses the same interpreter and the module next to that
+installed library, with bounded foreground process cleanup; deployment remains
+responsible for independent OS and credential isolation.
+
+Full-mode space discovery requires the installed `space_catalog.py` version 1
+helper. It calls the core `spaces.py` implementation (DIP-0015) and includes
+root, named, nested and canonical legacy spaces. Missing or malformed discovery
+refuses startup. Personal capture/ingestion and global module data require one
+unambiguous personal space; they never default to a team space. Scoped module
+names use the stable marker name and data paths use its actual directory.
+After a space identity or routing path changes, restart the server; stale
+sessions refuse tool calls. Existing data is not moved or renamed by discovery.
+The earlier audit's unpublished ordinal-based scoped tool names are replaced
+by `datacore_<stable-space-name>_<module>_<tool>`; global names remain unchanged.
+
+Journal resources validate calendar dates and read bounded, unlinked regular
+files. Keyword search reads current source files without retaining a process
+content cache; an index in one space cannot hide matches in another. Linked,
+changing, oversized or unreadable files and scan limits yield an explicit
+incomplete-coverage warning. Files are limited to 4 MiB, with a 32 MiB content
+budget, 10,000 directory entries and depth 32 per keyword search.
+
+Capture and ingestion create private notes with unique filenames and complete,
+non-replacing publication; existing note filenames and contents are preserved.
+Journal capture appends without rewriting earlier entries and syncs before
+acknowledging success. Local MCP writers and initializers coordinate through
+SQLite in `state/mcp-file-writes/coordination.db`; process death releases that
+lock. Keep this machine-local state out of synchronization. Initialization
+publishes complete defaults and packs without replacing existing user files.
+Aliased write directories and linked mutable journals are refused.
+
+These write checks are qualified on macOS/Linux filesystems. They do not provide
+cross-host locking or an exactly-once retry protocol. An interrupted request may
+have left a complete note or a partial new journal entry; inspect the destination
+before retrying a request whose durability could not be confirmed. Incomplete
+`.datacore-pending-*` artifacts are private and are not acknowledged notes.
+
 ## Prompts
 
 The server provides MCP prompts — workflow templates your AI can discover and use automatically:
@@ -203,8 +251,62 @@ DATACORE_HTTP_PORT=8080 datacore-mcp --http
 
 ## Module System (Full Mode)
 
-Full Datacore installations extend the MCP server with module-provided tools. Modules are discovered from `.datacore/modules/` and space-scoped directories. Each module can register its own tools under the `datacore_[module]_[tool]` namespace.
+Full Datacore installations discover module tools from `.datacore/modules/` and `[space]/.datacore/modules/`. Modules ship executable `tools/index.js`; discovery does not compile TypeScript.
+
+| Installation | Callable name | Default data directory |
+| --- | --- | --- |
+| Global `crm` | `datacore_crm_lookup` | `0-personal/.datacore/module-data/crm/data/` |
+| Personal `crm` | `datacore_0-personal_crm_lookup` | `0-personal/.datacore/module-data/crm/data/` |
+| Team `crm` | `datacore_1-team_crm_lookup` | `1-team/.datacore/module-data/crm/data/` |
+
+Scope is part of each space module's callable identity. Calls never choose a data destination by discovery order or fall back to a module in another space. Third-party module `acme/crm` uses namespace `acme-crm`; its private data directory uses the manifest name (`.../module-data/acme/crm/data/`). Module code directories may use the flattened name `acme-crm`.
+
+**Upgrade:** update callers of space-installed tools to the name advertised by `tools/list`. Their old unqualified names have no implicit alias, since such an alias could silently select a different space. Existing global callable names remain stable. Duplicate names (including collisions with core tools) and invalid or overlong identifiers are refused; unrelated tools remain available. Names must fit the 64-character MCP limit.
+
+Private data now has a separate root from installed module code. Legacy `data`,
+`state`, or `settings.local.yaml` in either the installed code or historical
+scoped directory blocks that module with `module-data-unverified`. Stop its
+writers, preserve backups, and use core's `module_data_migrate.py` with the
+verified space identity and legacy source directory. The helper retains the
+originals in private backup and supports interrupted retries; an incomplete
+receipt keeps the module unavailable. See core's `.datacore/lib/RUNTIME.md`
+for the procedure and filesystem limits. Loading modules never moves old data
+or silently replaces it with an empty store. Verify real reads and ownership
+under the installed service identity before resuming it.
+
+The full-mode server exposes all installed scopes to its owner. `dataPath` is a routing convention: trusted module handlers execute in the same process and retain its filesystem privileges. Use independently restricted processes, credentials and storage roots where separate security contexts are required.
+
+Registration validates handlers and argument contracts. Zod 3, Zod 4 and
+supported JSON Schema tools retain input validation; raw JSON Schema cannot
+fetch remote references or silently coerce input. Health reports the actual
+startup registration snapshot for each installed scope, without importing
+modules again or copying raw exceptions. A name shared by multiple scopes
+cannot select one health result implicitly.
+
+The `@datacore-one/mcp/runtime` export provides `z`, `yaml` and `findPython` from
+the selected package environment in ESM and CommonJS forms. `findPython()` uses
+the same Python 3.10+ selection as core discovery; an invalid explicit
+`DATACORE_PYTHON` returns no interpreter and never enables fallback. Delegates
+must still select installed code, bound their requests and subprocess lifetime,
+and restrict the child environment. The module must first be able to
+resolve the MCP package through an explicit installed package binding. A global
+installation or `NODE_PATH` alone does not make an ESM import resolve. Qualify
+that binding from the module's physical directory and service identity, or ship
+a qualified module bundle. [DIP-0049](https://github.com/datacore-one/datacore-dips/blob/main/DIP-0049-module-tool-loading-architecture.md)
+is a draft design discussion, not a claim that its entire installation proposal
+has been implemented.
 
 ## License
 
 MIT
+
+## Development verification
+
+The full release gate exercises both standalone mode and the actual core
+discovery provider. Check out the core commit pinned in `.github/workflows/ci.yml`,
+create a Python 3.10+ virtual environment, and install
+`scripts/requirements-core-tests.txt` with `pip install --require-hashes --no-deps`.
+Set `DATACORE_LIB` to that checkout's absolute `.datacore/lib` path and
+`DATACORE_PYTHON` to the virtual environment's absolute interpreter path. Run
+`npm ci`, `npm run verify`, and `./node_modules/.bin/tsc --noEmit`. CI performs
+these steps in isolated directories and never uses an operator installation.

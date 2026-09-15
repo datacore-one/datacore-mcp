@@ -1,5 +1,5 @@
 // test/ledger.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
@@ -23,15 +23,16 @@ describe('checkLedgerHealth', () => {
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dc-mcp-ledger-'))
+    vi.stubEnv('DATACORE_LIB', undefined)
     resetPythonCache()
   })
-  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }))
+  afterEach(() => { vi.unstubAllEnvs(); fs.rmSync(dir, { recursive: true, force: true }) })
 
   function withLedger(exitCode: number, space = '0-personal'): void {
     fs.mkdirSync(path.join(dir, '.datacore', 'lib'), { recursive: true })
     fs.writeFileSync(
-      path.join(dir, '.datacore', 'lib', 'ledger_cli.py'),
-      `import sys\nsys.exit(${exitCode})\n`,
+      path.join(dir, '.datacore', 'lib', 'ledger_health.py'),
+      `import json\nprint(json.dumps({"version":1,"ok":${exitCode ? "False" : "True"},"spaces_verified":${exitCode ? 0 : 1},"spaces_broken":${exitCode ? 1 : 0},"spaces_unverified":0}))\n`,
     )
     fs.mkdirSync(path.join(dir, space, '.datacore', 'events'), { recursive: true })
   }
@@ -47,7 +48,7 @@ describe('checkLedgerHealth', () => {
 
   it('reports null when a ledger exists but no space carries events', () => {
     fs.mkdirSync(path.join(dir, '.datacore', 'lib'), { recursive: true })
-    fs.writeFileSync(path.join(dir, '.datacore', 'lib', 'ledger_cli.py'), 'pass\n')
+    fs.writeFileSync(path.join(dir, '.datacore', 'lib', 'ledger_health.py'), 'import json\nprint(json.dumps({"version":1,"ok":None,"spaces_verified":0,"spaces_broken":0,"spaces_unverified":0}))\n')
     const r = checkLedgerHealth(dir)
     expect(r.ok).toBeNull()
   }, SLOW)
@@ -55,7 +56,7 @@ describe('checkLedgerHealth', () => {
   it('reports ok when every chain verifies', () => {
     withLedger(0)
     const r = checkLedgerHealth(dir)
-    if (!r.python) return // no capable interpreter on this box
+    expect(r.python).toBeDefined()
     expect(r.ok).toBe(true)
     expect(r.spaces_verified).toBe(1)
   }, SLOW)
@@ -63,7 +64,7 @@ describe('checkLedgerHealth', () => {
   it('reports FALSE when a chain is broken', () => {
     withLedger(3, '1-datafund')
     const r = checkLedgerHealth(dir)
-    if (!r.python) return
+    expect(r.python).toBeDefined()
     expect(r.ok).toBe(false)
     expect(r.detail).toContain('BROKEN')
   }, SLOW)
@@ -74,8 +75,8 @@ describe('checkLedgerHealth', () => {
     // selecting by name reports a healthy ledger as unreadable.
     withLedger(0)
     const r = checkLedgerHealth(dir)
-    if (!r.python) return
-    const v = execFileSync(r.python, ['-c', 'import sys;print("%d.%d" % sys.version_info[:2])'], {
+    expect(r.python).toBeDefined()
+    const v = execFileSync(r.python!, ['-c', 'import sys;print("%d.%d" % sys.version_info[:2])'], {
       encoding: 'utf8',
     }).trim()
     const parts = v.split('.').map(Number)

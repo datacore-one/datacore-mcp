@@ -1,8 +1,8 @@
 // src/tools/capture.ts
-import * as fs from 'fs'
 import * as path from 'path'
-import type { StorageConfig } from '../storage.js'
+import { assertStorageCurrent, type StorageConfig } from '../storage.js'
 import { validateContent, validateTitle } from '../limits.js'
+import { appendJournal, createNote } from '../durable-files.js'
 
 interface CaptureArgs {
   type: 'journal' | 'knowledge'
@@ -24,10 +24,23 @@ export async function handleCapture(args: CaptureArgs, storage: StorageConfig): 
     const titleError = validateTitle(args.title)
     if (titleError) return { success: false, error: titleError }
   }
-  if (args.type === 'journal') {
-    return captureJournal(args.content, storage.journalPath)
+  try {
+    assertStorageCurrent(storage)
+    if (!storage.journalPath || !storage.knowledgePath) {
+      return { success: false, error: 'Capture requires one unambiguous personal space.' }
+    }
+    if (args.type === 'journal') {
+      const { date, time } = localDate()
+      const filename = path.join(storage.journalPath, `${date}.md`)
+      appendJournal(storage.basePath, storage.statePath ?? path.join(storage.basePath, '.datacore/state'),
+        filename, `# ${date}\n`, `\n## ${time}\n\n${args.content}\n`)
+      return { success: true, path: filename }
+    }
+    return { success: true, path: createNote(storage.basePath, storage.knowledgePath,
+      args.content, args.title ?? 'Untitled', args.tags) }
+  } catch {
+    return { success: false, error: 'Capture could not be durably confirmed. Inspect the destination before retrying.' }
   }
-  return captureKnowledge(args.content, args.title, args.tags, storage.knowledgePath)
 }
 
 export function localDate(tz?: string): { date: string; time: string } {
@@ -36,35 +49,4 @@ export function localDate(tz?: string): { date: string; time: string } {
   const dateStr = now.toLocaleDateString('en-CA', { timeZone: timezone }) // en-CA gives YYYY-MM-DD
   const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: timezone })
   return { date: dateStr, time: timeStr }
-}
-
-function captureJournal(content: string, journalDir: string): CaptureResult {
-  const { date: today, time } = localDate()
-  const filePath = path.join(journalDir, `${today}.md`)
-
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-
-  if (fs.existsSync(filePath)) {
-    const existing = fs.readFileSync(filePath, 'utf8')
-    fs.writeFileSync(filePath, `${existing}\n## ${time}\n\n${content}\n`)
-  } else {
-    fs.writeFileSync(filePath, `# ${today}\n\n## ${time}\n\n${content}\n`)
-  }
-
-  return { success: true, path: filePath }
-}
-
-function captureKnowledge(content: string, title: string | undefined, tags: string[] | undefined, knowledgeDir: string): CaptureResult {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const slug = (title ?? 'note').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50)
-  const fileName = `${timestamp}-${slug}.md`
-  const filePath = path.join(knowledgeDir, fileName)
-
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-
-  const frontmatter = `---\ntitle: "${title ?? 'Untitled'}"\ncreated: "${new Date().toISOString()}"\n---\n\n`
-  const tagLine = tags?.length ? `\n${tags.map(t => `#${t}`).join(' ')}\n` : ''
-  fs.writeFileSync(filePath, `${frontmatter}${content}\n${tagLine}`)
-
-  return { success: true, path: filePath }
 }

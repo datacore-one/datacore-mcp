@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.tsbuildinfo
 .worktrees/
+
+# Pinned core library used by full-mode integration verification.
+.core-test/

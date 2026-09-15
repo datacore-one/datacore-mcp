@@ -33,51 +33,8 @@ export interface LedgerHealth {
   python?: string
 }
 
-const MIN_MAJOR = 3
-const MIN_MINOR = 10
-
-let cachedPython: string | null | undefined
-
-function findPython(): string | null {
-  if (cachedPython !== undefined) return cachedPython
-  const candidates = [
-    process.env.DATACORE_PYTHON,
-    'python3.13',
-    'python3.12',
-    'python3.11',
-    'python3.10',
-    '/opt/homebrew/bin/python3',
-    '/usr/local/bin/python3',
-    'python3',
-  ].filter(Boolean) as string[]
-
-  for (const bin of candidates) {
-    try {
-      const out = execFileSync(bin, ['-c', 'import sys;print("%d.%d" % sys.version_info[:2])'], {
-        encoding: 'utf8',
-        timeout: 5000,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim()
-      const parts = out.split('.').map(Number)
-      const maj = parts[0]
-      const min = parts[1]
-      if (maj === undefined || min === undefined) continue
-      if (maj > MIN_MAJOR || (maj === MIN_MAJOR && min >= MIN_MINOR)) {
-        cachedPython = bin
-        return cachedPython
-      }
-    } catch {
-      // Not installed here — try the next candidate.
-    }
-  }
-  cachedPython = null
-  return cachedPython
-}
-
-/** Test seam — resolution is cached because probing spawns processes. */
-export function resetPythonCache(): void {
-  cachedPython = undefined
-}
+import { findPython } from './runtime-python.js'
+export { resetPythonCache } from './runtime-python.js'
 
 /**
  * Verify every writer's hash chain in every space that has one.
@@ -86,71 +43,38 @@ export function resetPythonCache(): void {
  * waiting on, so a hung probe would turn "how am I doing?" into a stalled tool.
  */
 export function checkLedgerHealth(basePath: string): LedgerHealth {
-  const ledgerCli = path.join(basePath, '.datacore', 'lib', 'ledger_cli.py')
-  if (!fs.existsSync(ledgerCli)) {
-    return { ok: null, detail: 'no ledger in this installation (pre-v2) — run: datacore update' }
+  const explicit = process.env.DATACORE_LIB
+  const library = explicit ?? path.join(basePath, '.datacore', 'lib')
+  if (!library || !path.isAbsolute(library)) {
+    return { ok: null, detail: 'installed ledger library is unavailable; set DATACORE_LIB' }
   }
-
+  const helper = path.join(library, 'ledger_health.py')
+  if (!fs.existsSync(helper)) {
+    return { ok: null, detail: 'installed ledger verification helper unavailable (pre-v2 or incomplete installation); reconcile the qualified release' }
+  }
   const python = findPython()
-  if (!python) {
-    return {
-      ok: null,
-      detail: `no python >= ${MIN_MAJOR}.${MIN_MINOR} (macOS system python3 is 3.9 and cannot load the ledger) — set DATACORE_PYTHON`,
-    }
-  }
-
-  let spaces: string[]
+  if (!python) return { ok: null, detail: 'selected Python is unavailable or incompatible; reconcile DATACORE_PYTHON' }
   try {
-    spaces = fs
-      .readdirSync(basePath, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && /^\d-/.test(e.name))
-      .map((e) => path.join(basePath, e.name))
-      .filter((p) => fs.existsSync(path.join(p, '.datacore', 'events')))
-  } catch {
-    return { ok: null, detail: 'could not enumerate spaces', python }
-  }
-
-  if (spaces.length === 0) {
-    return { ok: null, detail: 'no space carries an event log yet', python }
-  }
-
-  const broken: string[] = []
-  const unverifiable: string[] = []
-  for (const space of spaces) {
-    try {
-      execFileSync(python, [ledgerCli, 'verify', '--space', space], {
-        encoding: 'utf8',
-        timeout: 30000,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
-    } catch (err: unknown) {
-      // A numeric exit status is a VERDICT (chain broken). A spawn failure is
-      // the absence of one. Reporting the second as the first would raise an
-      // incident because an interpreter moved.
-      const e = err as { status?: number }
-      if (typeof e.status === 'number') broken.push(path.basename(space))
-      else unverifiable.push(path.basename(space))
+    const raw = execFileSync(python, ['-I', helper, '--root', basePath], {
+      encoding: 'utf8', timeout: 30000, maxBuffer: 65536, stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    const result = JSON.parse(raw) as Record<string, unknown>
+    const keys = ['spaces_verified', 'spaces_broken', 'spaces_unverified']
+    if (!result || result.version !== 1 || ![true, false, null].includes(result.ok as boolean | null)
+      || keys.some(key => typeof result[key] !== 'number' || !Number.isSafeInteger(result[key]) || Number(result[key]) < 0)) {
+      throw new Error('invalid verification response')
     }
-  }
-
-  if (broken.length > 0) {
+    const verified = Number(result.spaces_verified)
+    const broken = Number(result.spaces_broken)
+    const unverified = Number(result.spaces_unverified)
+    const ok = broken > 0 ? false : result.ok === true && verified > 0 && unverified === 0 ? true : null
     return {
-      ok: false,
-      detail: `hash chain BROKEN in ${broken.join(', ')} — folded state is untrustworthy; run ledger_cli.py verify`,
-      spaces_verified: spaces.length - broken.length - unverifiable.length,
-      python,
+      ok, python, spaces_verified: verified,
+      detail: broken ? `ledger chain BROKEN in ${broken} space(s)`
+        : ok ? `${verified} space(s) verified`
+        : `ledger verification incomplete: ${verified} verified, ${unverified} unverified`,
     }
-  }
-  if (unverifiable.length === spaces.length) {
-    return { ok: null, detail: `could not verify ${unverifiable.join(', ')}`, python }
-  }
-  const verified = spaces.length - unverifiable.length
-  return {
-    ok: true,
-    detail:
-      `${verified} space(s) verified` +
-      (unverifiable.length ? `, ${unverifiable.length} unverifiable` : ''),
-    spaces_verified: verified,
-    python,
+  } catch {
+    return { ok: null, python, detail: 'installed ledger verifier failed or returned an invalid response' }
   }
 }

@@ -2,39 +2,52 @@ name: Publish to npm
 
 on:
   workflow_dispatch:
-    inputs:
-      skip_gate:
-        description: 'Skip prepublishOnly gate (use only if MCP handshake fails in CI with no config)'
-        type: boolean
-        default: false
-        required: false
+
+permissions:
+  contents: read
 
 jobs:
   publish:
     name: npm publish
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
+      - name: Check out the qualified discovery provider
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: datacore-one/datacore
+          ref: main
+          path: .core-test
+          persist-credentials: false
+
+      - name: Prepare isolated discovery runtime
+        run: |
+          python3 -m venv "$RUNNER_TEMP/datacore-test-python"
+          "$RUNNER_TEMP/datacore-test-python/bin/python" -m pip install --require-hashes --no-deps -r scripts/requirements-core-tests.txt
+          echo "DATACORE_LIB=$GITHUB_WORKSPACE/.core-test/.datacore/lib" >> "$GITHUB_ENV"
+          echo "DATACORE_PYTHON=$RUNNER_TEMP/datacore-test-python/bin/python" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Verify exact source and runtime
+        run: |
+          ./node_modules/.bin/tsc --noEmit
+          npm run verify
 
       - name: Publish to npm
         run: |
-          if [ "${{ inputs.skip_gate }}" = "true" ]; then
-            npm publish --access public --ignore-scripts
-          else
-            npm publish --access public
-          fi
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -51,4 +64,5 @@ jobs:
             echo "  Attempt $i: npm shows $LIVE, waiting 10s..."
             sleep 10
           done
-          echo "Warning: npm may still be propagating. Check: npm view @datacore-one/mcp version"
+          echo "Published version could not be verified; inspect registry state before retrying." >&2
+          exit 1

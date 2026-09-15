@@ -7,8 +7,8 @@ import { buildHints } from '../hints.js'
 import { checkLedgerHealth, type LedgerHealth } from '../ledger.js'
 
 interface StatusPaths {
-  journalPath: string
-  knowledgePath: string
+  journalPath: string | null
+  knowledgePath: string | null
   packsPath: string
   mode: string
   basePath: string
@@ -37,13 +37,15 @@ export async function handleStatus(
 
   // Check for today's journal
   const { date: today } = localDate()
-  const todayJournal = path.join(paths.journalPath, `${today}.md`)
-  if (!fs.existsSync(todayJournal)) {
+  const todayJournal = paths.journalPath ? path.join(paths.journalPath, `${today}.md`) : null
+  if (!todayJournal) {
+    recommendations.push('Personal writes are unavailable: configure one unambiguous personal space and restart.')
+  } else if (!fs.existsSync(todayJournal)) {
     recommendations.push('No journal entry today. Use datacore_capture to start one.')
   }
 
   if (updateAvailable) {
-    recommendations.push(`Update available: ${updateAvailable}. Run: npm update -g @datacore-one/mcp`)
+    recommendations.push(`Update available: ${updateAvailable}. Reconcile the declared runtime profile and verify it before switching versions`)
   }
 
   // The ledger is the only thing here that can make the installation's own
@@ -51,8 +53,8 @@ export async function handleStatus(
   const ledger = checkLedgerHealth(paths.basePath)
   if (ledger.ok === false) {
     recommendations.unshift(`LEDGER: ${ledger.detail}`)
-  } else if (ledger.ok === null && ledger.detail.includes('pre-v2')) {
-    recommendations.push(`LEDGER: ${ledger.detail}`)
+  } else if (ledger.ok === null) {
+    recommendations.unshift(`LEDGER: ${ledger.detail}`)
   }
 
   const statusResult: StatusResult = {
@@ -77,8 +79,8 @@ export async function handleStatus(
   return statusResult
 }
 
-function countFiles(dir: string, ext: string): number {
-  if (!fs.existsSync(dir)) return 0
+function countFiles(dir: string | null, ext: string): number {
+  if (!dir || !fs.existsSync(dir)) return 0
   let count = 0
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const fullPath = path.join(dir, entry.name)
