@@ -25,19 +25,28 @@ function install(scope: string, directory = 'fixture') {
   fs.writeFileSync(path.join(code, 'tools/index.js'), `export const tools=[{name:'identify',inputSchema:{type:'object'},handler:async(_,ctx)=>({code:ctx.modulePath, data:ctx.dataPath, space:ctx.spaceName})}];`)
   return code
 }
-it('keeps the legacy name and existing private data by default', async () => {
+it('keeps the legacy name and resolves data into the space store', async () => {
   const code = install('')
   install('1-team')
-  const data = path.join(root, '0-personal/.datacore/modules/fixture/data')
-  fs.mkdirSync(data, {recursive:true,mode:0o700}); fs.writeFileSync(path.join(data, 'note'), 'keep')
+  const data = path.join(root, '0-personal/.datacore/module-data/fixture/data')
   const storage = detectStorage(), modules = discoverModules(storage)
   const tools = await loadModuleTools(modules, storage)
   expect(tools.map(t=>t.fullName)).toEqual(['datacore_fixture_identify'])
   expect(await tools[0].definition.handler({},tools[0].context)).toEqual({code,data,space:'personal'})
-  expect(fs.readFileSync(path.join(data,'note'),'utf8')).toBe('keep')
-  expect(fs.existsSync(path.join(root,'0-personal/.datacore/module-data'))).toBe(false)
   const health = await handleModulesHealth({},storage,modules) as any
   expect(health.modules.find((m:any)=>m.space==='team').selection).toBe('not-selected')
+})
+it('refuses rather than supersedes private data still sitting beside code', async () => {
+  // A new empty store reads to a module as "no data yet" and it writes a fresh
+  // history over the top, so an unmigrated legacy directory must stop the tool
+  // from loading rather than be silently replaced. The bytes stay put.
+  install('')
+  const legacy = path.join(root, '0-personal/.datacore/modules/fixture/data')
+  fs.mkdirSync(legacy, {recursive:true,mode:0o700}); fs.writeFileSync(path.join(legacy,'note'),'keep')
+  const storage = detectStorage()
+  expect(await loadModuleTools(discoverModules(storage), storage)).toEqual([])
+  expect(fs.readFileSync(path.join(legacy,'note'),'utf8')).toBe('keep')
+  expect(fs.existsSync(path.join(root,'0-personal/.datacore/module-data/fixture/data'))).toBe(false)
 })
 it('selects space > personal > global without changing the name or destination', async () => {
   install(''); const personal = install('0-personal'); const team = install('1-team')
