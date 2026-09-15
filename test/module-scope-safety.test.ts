@@ -32,8 +32,11 @@ function install(scopes: string[]) {
   return { mode: 'full', basePath: root, scopedModuleNames: true } as StorageConfig
 }
 
-function scopesDataDirectory(first: string, space: string | undefined) {
-  return space === 'team' || first === '0-personal' ? '.datacore/module-data' : '.datacore/modules'
+// Code and private data are strictly separate: the store is always the using
+// space's module-data, never a directory beside installed code, and never the
+// installation root (which is the public core repo).
+function scopesDataDirectory(_first: string, _space: string | undefined) {
+  return '.datacore/module-data'
 }
 
 describe('opt-in scoped module routing is unambiguous', () => {
@@ -86,7 +89,7 @@ describe('opt-in scoped module routing is unambiguous', () => {
     const tools = await loadModuleTools(modules, storage)
     expect(tools.map(tool => tool.fullName)).toEqual(['datacore_acme-fixture_identify'])
     expect(tools[0].context.dataPath).toBe(path.join(storage.basePath,
-      '0-personal/.datacore/modules/acme/fixture/data'))
+      '0-personal/.datacore/module-data/acme/fixture/data'))
   })
 
   it.each(['../fixture', '/fixture', 'acme/../fixture', 'fixture.name', '', 12])(
