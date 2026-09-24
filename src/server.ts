@@ -46,6 +46,43 @@ let serverRef: Server | null = null
 let datacortexBridge: DatacortexBridge | null = null
 export let benchLogger: SessionLogger | null = null
 
+// --- Tool profiles ---
+
+/**
+ * Cursor caps a workspace at ~40 MCP tools across every server, and a full
+ * installation advertises 70+ (every module's tools). `cursor` and `lean`
+ * advertise the core tools plus one dispatcher, datacore_call, which reaches
+ * every module tool through the same routing and argument validation as a
+ * direct call. Direct calls by name keep working under every profile.
+ * Anything other than the two known values means `full`: an unknown setting
+ * must not quietly hide tools.
+ */
+export type ToolProfile = 'full' | 'lean' | 'cursor'
+
+export function resolveToolProfile(value = process.env.DATACORE_TOOL_PROFILE): ToolProfile {
+  return value === 'lean' || value === 'cursor' ? value : 'full'
+}
+
+const CALL_TOOL_NAME = 'datacore_call'
+const CALL_TOOL_SCHEMA = z.object({
+  tool: z.string().optional().describe('Full tool name, e.g. datacore_gtd_add_task. Omit to list every tool this can reach, with its argument schema.'),
+  args: z.record(z.string(), z.unknown()).optional().describe('Arguments for that tool, exactly as its schema describes.'),
+})
+const CALL_TOOL = {
+  name: CALL_TOOL_NAME,
+  description: 'Call any Datacore module tool (GTD, CRM, goals, decisions, research, trading, ...) by name. '
+    + 'This client shows a reduced tool list to stay under its tool limit; the rest are reachable here with the same '
+    + 'arguments and validation. Call with no `tool` to list them with their argument schemas.',
+  inputSchema: CALL_TOOL_SCHEMA,
+}
+
+function reachableTools(): Array<{ name: string; description: string; inputSchema: unknown }> {
+  return moduleTools.flatMap(t => {
+    try { return [{ name: t.fullName, description: t.definition.description, inputSchema: toJsonSchema(t.definition.inputSchema) }] }
+    catch { return [] }
+  })
+}
+
 // --- Server creation ---
 
 export function createServer(): Server {
@@ -70,6 +107,15 @@ export function createServer(): Server {
     const coreTools = storage.mode === 'core'
       ? TOOLS.filter(t => !t.name.startsWith('datacore_modules_') && !t.name.startsWith('datacore_command_') && !t.name.startsWith('datacore_agent_'))
       : TOOLS
+    if (resolveToolProfile() !== 'full') {
+      return {
+        tools: [...coreTools, CALL_TOOL].map(t => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: z.toJSONSchema(t.inputSchema),
+        })),
+      }
+    }
     return {
       tools: [
         ...coreTools.map(t => ({
@@ -171,6 +217,14 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
   assertStorageCurrent(storage)
   // Accept legacy dot-namespaced names; route by the advertised underscore form.
   const lookupName = canonicalToolName(name)
+  if (lookupName === CALL_TOOL_NAME) {
+    const { tool, args: inner } = CALL_TOOL_SCHEMA.parse(args)
+    if (!tool) {
+      return { tools: reachableTools(), note: 'Call datacore_call with {tool, args}. Core tools are also callable directly.' }
+    }
+    if (canonicalToolName(tool) === CALL_TOOL_NAME) throw new ArgumentValidationError()
+    return routeToolInner(tool, inner ?? {})
+  }
   const coreTool = TOOLS.find(t => t.name === lookupName)
   if (coreTool) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Zod validates at runtime; union type too wide for TS
