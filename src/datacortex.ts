@@ -21,7 +21,7 @@ export class DatacortexBridge {
   private scriptPath: string | null
 
   constructor(datacorePath: string) {
-    this.pythonPath = findPython()
+    this.pythonPath = findPython(datacorePath)
     this.scriptPath = this.findBridgeScript(datacorePath)
   }
 

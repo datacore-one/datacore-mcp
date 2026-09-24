@@ -52,7 +52,7 @@ export function checkLedgerHealth(basePath: string): LedgerHealth {
   if (!fs.existsSync(helper)) {
     return { ok: null, detail: 'installed ledger verification helper unavailable (pre-v2 or incomplete installation); reconcile the qualified release' }
   }
-  const python = findPython()
+  const python = findPython(basePath)
   if (!python) return { ok: null, detail: 'selected Python is unavailable or incompatible; reconcile DATACORE_PYTHON' }
   try {
     const raw = execFileSync(python, ['-I', helper, '--root', basePath], {

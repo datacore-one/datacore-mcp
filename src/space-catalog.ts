@@ -2,7 +2,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { findPython } from './runtime-python.js'
+import { findPython, PYTHON_UNAVAILABLE_MESSAGE } from './runtime-python.js'
 
 export interface CatalogSpace {
   name: string
@@ -17,8 +17,9 @@ export function readSpaceCatalog(basePath: string): CatalogSpace[] {
   try {
     const root = fs.realpathSync(basePath)
     const library = process.env.DATACORE_LIB ?? path.join(root, '.datacore/lib')
-    const python = findPython()
-    if (!python || !library || !path.isAbsolute(library)) throw new Error()
+    const python = findPython(root)
+    if (!python) throw new Error(PYTHON_UNAVAILABLE_MESSAGE)
+    if (!library || !path.isAbsolute(library)) throw new Error()
     const raw = execFileSync(python, ['-I', path.join(library, 'space_catalog.py'), '--root', root], {
       encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -41,7 +42,8 @@ export function readSpaceCatalog(basePath: string): CatalogSpace[] {
         journalPath: fs.existsSync(notes) ? notes : path.join(rootPath, 'journal'),
         knowledgePath: path.join(rootPath, '3-knowledge') }
     })
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.message === PYTHON_UNAVAILABLE_MESSAGE) throw err
     throw new Error('Space discovery could not be verified. Reconcile the selected core library, Python and space configuration.')
   }
 }

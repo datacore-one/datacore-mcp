@@ -7,6 +7,8 @@ import { discoverModules, loadModuleTools } from '../src/modules.js'
 import { handleCapture } from '../src/tools/capture.js'
 import { handleIngest } from '../src/tools/ingest.js'
 import { handleModulesInfo } from '../src/tools/modules-info.js'
+import { readSpaceCatalog } from '../src/space-catalog.js'
+import { resetPythonCache } from '../src/runtime-python.js'
 
 let root: string
 beforeEach(() => {
@@ -110,4 +112,14 @@ it('does not import global handlers without a verified personal destination', as
   marker('named-team', 'team'); moduleAt('')
   const storage = detectStorage()
   expect(await loadModuleTools(discoverModules(storage), storage)).toEqual([])
+})
+
+it('names DATACORE_PYTHON when no usable interpreter exists', () => {
+  const bad = path.join(root, 'bad-python')
+  fs.writeFileSync(bad, '#!/bin/sh\nexit 1\n'); fs.chmodSync(bad, 0o755)
+  vi.stubEnv('DATACORE_PYTHON', bad)
+  resetPythonCache()
+  try {
+    expect(() => readSpaceCatalog(root)).toThrow(/DATACORE_PYTHON/)
+  } finally { vi.unstubAllEnvs(); resetPythonCache() }
 })
