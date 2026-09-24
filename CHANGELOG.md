@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.3.0] — 2026-09-24
+
+- **Tool profiles for clients with tool caps.** `DATACORE_TOOL_PROFILE=cursor` (or `lean`) advertises the 12 core tools plus `datacore_call`, which reaches every module tool with the same routing and argument validation (`datacore_call` with no `tool` lists them with their schemas). Cursor caps a workspace at ~40 MCP tools across all servers; a full install advertises 70+. Unknown values mean `full`, and direct calls by name keep working under every profile.
+
 ## [2.2.1] — 2026-09-24
 
 First npm release since 2.1.0; it also carries the unpublished 2.1.1–2.2.0 work below.
