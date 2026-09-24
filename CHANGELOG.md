@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.1] — 2026-09-24
+
+First npm release since 2.1.0; it also carries the unpublished 2.1.1–2.2.0 work below.
+
+- **Fix: the server refused to start when the first Python on PATH lacked PyYAML.** Interpreter selection now probes `import yaml`, prefers `<root>/.datacore/venv/bin/python`, and names `DATACORE_PYTHON` in the error when nothing qualifies. This affected Codex, plain shells and fresh installs on macOS with Homebrew Python.
+- **`@datacore-one/mcp/runtime` export**, which module `tools/index.js` files import. Module tools on any install other than a development checkout need this release.
+
+## [2.2.0] — 2026-09-15 (unpublished)
+
+- Module scope audit and space-aware data routing; personal-space precedence instead of refusing two personal spaces.
+- Runtime contracts enforced and MCP data preserved across upgrades (#21).
+
 ## [2.1.3] — 2026-09-12
 
 - **Security**: pin `hono ≥4.13.5` via overrides — clears 3 Dependabot CVEs (#69/#70/#71: parseBody memory exhaustion, toSSG path traversal, query parser cache poisoning). Interim fix until `@modelcontextprotocol/sdk` ships the upstream upgrade.
