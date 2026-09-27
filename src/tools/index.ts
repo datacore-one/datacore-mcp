@@ -10,6 +10,9 @@ export const TOOLS = [
       content: z.string().describe('Content to capture'),
       title: z.string().optional().describe('Title for knowledge notes'),
       tags: z.array(z.string()).optional().describe('Tags to attach'),
+      space: z.string().optional().describe('Space to write to, by name or folder (e.g. "team" or "1-team"); default: the personal space'),
+      kind: z.enum(['zettel', 'literature', 'reference', 'pages']).optional()
+        .describe('Knowledge note kind: its folder under <space>/3-knowledge/ (atomic idea: zettel; source summary: literature; person/company: reference; wiki page: pages)'),
     }),
   },
   {
