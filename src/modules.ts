@@ -91,6 +91,15 @@ export interface RegisteredModuleTool {
 export const moduleLoadErrors: Map<string, string> = new Map()
 export const moduleRegisteredTools: Map<string, Set<string>> = new Map()
 export const moduleSelection: Map<string, 'active' | 'not-selected' | 'overridden' | 'ambiguous'> = new Map()
+/**
+ * Module directories whose module.yaml exists but could not be read as a
+ * manifest (invalid YAML, no name). Keyed by the manifest path. A module that
+ * breaks its own manifest must be REPORTED, not dropped: the scan used to skip
+ * it in a bare catch, so the health report named every module except the
+ * broken one (MOD-2).
+ */
+export interface UnreadableModule { dir: string; manifestPath: string; scope: 'global' | 'space'; spaceName?: string; reason: string }
+export const moduleManifestErrors: Map<string, UnreadableModule> = new Map()
 export function moduleLoadKey(mod: Pick<DiscoveredModule, 'scope' | 'spaceName' | 'modulePath'>): string {
   return JSON.stringify([mod.scope, mod.spaceName ?? '', path.resolve(mod.modulePath)])
 }
@@ -103,6 +112,7 @@ export function discoverModules(storage: StorageConfig): DiscoveredModule[] {
   const modules: DiscoveredModule[] = []
 
   if (storage.mode !== 'full') return modules
+  moduleManifestErrors.clear()   // this scan is the whole truth about which manifests fail
 
   // 1. Global modules: basePath/.datacore/modules/*/
   const globalModulesDir = path.join(storage.basePath, '.datacore', 'modules')
@@ -156,7 +166,12 @@ function scanModulesDir(
       try {
         const raw = fs.readFileSync(manifestPath, 'utf-8')
         const manifest = yaml.load(raw) as ModuleManifest
-        if (!manifest || !manifest.name) continue
+        if (!manifest || typeof manifest !== 'object' || !manifest.name) {
+          moduleManifestErrors.set(manifestPath, { dir: entry, manifestPath, scope, spaceName,
+            reason: 'module.yaml has no name' })
+          continue
+        }
+        moduleManifestErrors.delete(manifestPath)
 
         modules.push({
           name: manifest.name,
@@ -168,8 +183,10 @@ function scanModulesDir(
           spaceName,
           spacePath,
         })
-      } catch {
-        // Invalid YAML or missing name — skip
+      } catch (err) {
+        // Invalid YAML: not loadable, but never silently absent.
+        moduleManifestErrors.set(manifestPath, { dir: entry, manifestPath, scope, spaceName,
+          reason: `module.yaml does not parse (${(err as Error).name || 'error'})` })
       }
     }
   } catch {

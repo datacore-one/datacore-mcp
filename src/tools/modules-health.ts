@@ -1,7 +1,7 @@
 // src/tools/modules-health.ts
 import * as fs from 'fs'
 import * as path from 'path'
-import { discoverModules, moduleLoadErrors, moduleLoadKey, moduleRegisteredTools, moduleSelection, type DiscoveredModule } from '../modules.js'
+import { discoverModules, moduleLoadErrors, moduleLoadKey, moduleManifestErrors, moduleRegisteredTools, moduleSelection, type DiscoveredModule } from '../modules.js'
 import type { StorageConfig } from '../storage.js'
 
 export interface HealthIssue {
@@ -35,11 +35,20 @@ export async function handleModulesHealth(
     if (!found) {
       return { error: `Module '${args.module}' not found` }
     }
-    return await checkModule(found, storage)
+    return await checkModule(found, storage, new Set(modules.map(m => m.name)))
   }
 
   // Check all modules
-  const checks = await Promise.all(modules.map(m => checkModule(m, storage)))
+  const installed = new Set(modules.map(m => m.name))
+  const checks: HealthCheck[] = await Promise.all(modules.map(m => checkModule(m, storage, installed)))
+  // A module whose manifest cannot be read is a broken module, not an absent one.
+  for (const bad of moduleManifestErrors.values()) {
+    checks.push({
+      name: bad.dir, scope: bad.scope, space: bad.spaceName ?? null, status: 'error', symlink: null,
+      issues: [{ severity: 'error', code: 'MANIFEST_UNREADABLE', message: `${bad.reason}: ${bad.manifestPath}`,
+        hint: 'Fix module.yaml; until then none of this module\'s tools, commands or agents load.' }],
+    })
+  }
   const ok = checks.filter(c => c.status === 'ok').length
   const warnings = checks.filter(c => c.status === 'warning').length
   const errors = checks.filter(c => c.status === 'error').length
@@ -50,9 +59,22 @@ export async function handleModulesHealth(
   }
 }
 
+/** Names every installation satisfies: the Datacore core itself is not a module. */
+const CORE_NAMES = new Set(['core', 'datacore'])
+
+/** `name`, `name@>=1.0.0` or {name, version} -> the module name, or null. */
+function dependencyName(dep: unknown): string | null {
+  if (typeof dep === 'string') return dep.split('@')[0]!.trim() || null
+  if (dep && typeof dep === 'object' && typeof (dep as { name?: unknown }).name === 'string') {
+    return ((dep as { name: string }).name).trim() || null
+  }
+  return null
+}
+
 async function checkModule(
   mod: DiscoveredModule,
   storage: StorageConfig,
+  installed: Set<string> = new Set(),
 ): Promise<HealthCheck> {
   const issues: HealthIssue[] = []
   const manifest = mod.manifest as unknown as Record<string, unknown>
@@ -96,6 +118,20 @@ async function checkModule(
       severity: 'warning',
       code: 'MANIFEST_VERSION_OUTDATED',
       message: 'module.yaml uses v1 format (missing manifest_version: 2)',
+    })
+  }
+
+  // Required modules (MOD-2): a module that needs one that is not installed
+  // is broken, and says which. `optional:` entries are not requirements.
+  const deps = Array.isArray(manifest.dependencies) ? manifest.dependencies as unknown[] : []
+  for (const dep of deps) {
+    const name = dependencyName(dep)
+    if (!name || CORE_NAMES.has(name) || installed.has(name)) continue
+    issues.push({
+      severity: 'error',
+      code: 'MISSING_DEPENDENCY',
+      message: `Requires module '${name}' (${typeof dep === 'string' ? dep : name}), which is not installed`,
+      hint: `datacore module install ${name}`,
     })
   }
 

@@ -2,6 +2,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import type { StorageConfig } from '../storage.js'
+import { discoverModules, moduleLoadKey, moduleSelection } from '../modules.js'
 
 /**
  * Parse YAML frontmatter from a markdown file.
@@ -50,11 +51,58 @@ function parseFrontmatter(filePath: string): { frontmatter: Record<string, unkno
 /**
  * Discover all commands in .datacore/commands/ (full mode only).
  */
+/**
+ * The commands (or agents) each installed module DECLARES under
+ * `provides.commands` / `provides.agents`, as `<module>/<kind>/<name>.md`.
+ *
+ * Declared, and only declared (MOD-1): listing every markdown file a module
+ * happens to ship would expose what it never offered, and reading only
+ * .datacore/commands left every module's declared command unreachable. A
+ * module outside the selected context (overridden, not selected) offers
+ * nothing. A name already taken by the core, or by an earlier module, keeps
+ * its first owner.
+ */
+function moduleDocs(storage: StorageConfig, kind: 'commands' | 'agents'): Array<{ name: string; filePath: string }> {
+  const out: Array<{ name: string; filePath: string }> = []
+  let modules
+  try {
+    modules = discoverModules(storage)
+  } catch {
+    return out
+  }
+  for (const mod of [...modules].sort((a, b) => a.name.localeCompare(b.name))) {
+    const selection = moduleSelection.get(moduleLoadKey(mod))
+    if (selection && selection !== 'active') continue
+    const declared = (mod.manifest.provides?.[kind] ?? []) as unknown[]
+    for (const entry of declared) {
+      const name = typeof entry === 'string' ? entry
+        : entry && typeof entry === 'object' && typeof (entry as { name?: unknown }).name === 'string'
+          ? (entry as { name: string }).name : ''
+      if (!/^[A-Za-z0-9][\w.:-]*$/.test(name)) continue
+      const filePath = join(mod.realPath, kind, `${name}.md`)
+      if (existsSync(filePath) && statSync(filePath).isFile()) out.push({ name, filePath })
+    }
+  }
+  return out
+}
+
 export function discoverCommands(storage: StorageConfig): CommandInfo[] {
   const commandsDir = join(storage.basePath, '.datacore', 'commands')
-  if (!existsSync(commandsDir)) return []
-
   const results: CommandInfo[] = []
+  const add = (name: string, filePath: string) => {
+    if (results.some(r => r.name === name)) return
+    const parsed = parseFrontmatter(filePath)
+    results.push({
+      name,
+      description: (parsed?.frontmatter.description as string) ?? `${name} command`,
+      userInvocable: parsed?.frontmatter.user_invocable !== false,
+      source: filePath,
+    })
+  }
+  if (!existsSync(commandsDir)) {
+    for (const d of moduleDocs(storage, 'commands')) add(d.name, d.filePath)
+    return results.sort((a, b) => a.name.localeCompare(b.name))
+  }
 
   for (const entry of readdirSync(commandsDir)) {
     if (!entry.endsWith('.md')) continue
@@ -71,6 +119,7 @@ export function discoverCommands(storage: StorageConfig): CommandInfo[] {
       source: filePath,
     })
   }
+  for (const d of moduleDocs(storage, 'commands')) add(d.name, d.filePath)
 
   return results.sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -108,7 +157,10 @@ export function handleCommandList(_args: Record<string, unknown>, storage: Stora
  */
 export function handleCommandRun(args: { command: string }, storage: StorageConfig) {
   const commandsDir = join(storage.basePath, '.datacore', 'commands')
-  const filePath = join(commandsDir, `${args.command}.md`)
+  let filePath = join(commandsDir, `${args.command}.md`)
+  if (!existsSync(filePath)) {
+    filePath = moduleDocs(storage, 'commands').find(d => d.name === args.command)?.filePath ?? filePath
+  }
 
   if (!existsSync(filePath)) {
     // Suggest closest matches
@@ -142,9 +194,21 @@ export function handleCommandRun(args: { command: string }, storage: StorageConf
  */
 export function discoverAgents(storage: StorageConfig): AgentInfo[] {
   const agentsDir = join(storage.basePath, '.datacore', 'agents')
-  if (!existsSync(agentsDir)) return []
-
   const results: AgentInfo[] = []
+  const add = (name: string, filePath: string) => {
+    if (results.some(r => r.name === name)) return
+    const parsed = parseFrontmatter(filePath)
+    results.push({
+      name,
+      description: (parsed?.frontmatter.description as string) ?? `${name} agent`,
+      model: (parsed?.frontmatter.model as string) ?? 'inherit',
+      source: filePath,
+    })
+  }
+  if (!existsSync(agentsDir)) {
+    for (const d of moduleDocs(storage, 'agents')) add(d.name, d.filePath)
+    return results.sort((a, b) => a.name.localeCompare(b.name))
+  }
 
   for (const entry of readdirSync(agentsDir)) {
     if (!entry.endsWith('.md')) continue
@@ -161,6 +225,7 @@ export function discoverAgents(storage: StorageConfig): AgentInfo[] {
       source: filePath,
     })
   }
+  for (const d of moduleDocs(storage, 'agents')) add(d.name, d.filePath)
 
   return results.sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -196,7 +261,10 @@ export function handleAgentList(_args: Record<string, unknown>, storage: Storage
  */
 export function handleAgentRun(args: { agent: string }, storage: StorageConfig) {
   const agentsDir = join(storage.basePath, '.datacore', 'agents')
-  const filePath = join(agentsDir, `${args.agent}.md`)
+  let filePath = join(agentsDir, `${args.agent}.md`)
+  if (!existsSync(filePath)) {
+    filePath = moduleDocs(storage, 'agents').find(d => d.name === args.agent)?.filePath ?? filePath
+  }
 
   if (!existsSync(filePath)) {
     const all = discoverAgents(storage)
