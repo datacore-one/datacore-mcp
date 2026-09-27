@@ -69,6 +69,22 @@ describe('checkLedgerHealth', () => {
     expect(r.detail).toContain('BROKEN')
   }, SLOW)
 
+  it('remembers a verdict briefly, so status answers inside its time limit (MOD-7)', () => {
+    withLedger(0)
+    expect(checkLedgerHealth(dir).ok).toBe(true)
+    // The helper now fails; within the cache window the last verdict answers, marked with its age.
+    fs.writeFileSync(path.join(dir, '.datacore', 'lib', 'ledger_health.py'), 'raise SystemExit(1)\n')
+    const r = checkLedgerHealth(dir)
+    expect(r.ok).toBe(true)
+    expect(r.detail).toContain('checked')
+    // Outside the window it checks again and says what it found.
+    const cache = path.join(dir, '.datacore', 'state', 'ledger-health.json')
+    const c = JSON.parse(fs.readFileSync(cache, 'utf8'))
+    c.checked_at -= 60 * 60 * 1000
+    fs.writeFileSync(cache, JSON.stringify(c))
+    expect(checkLedgerHealth(dir).ok).toBeNull()
+  }, SLOW)
+
   it('never selects an interpreter that cannot load the ledger', () => {
     // The regression this exists for: `python3` on macOS is 3.9, which raises
     // TypeError on the ledger's PEP-604 annotations at import time — so
