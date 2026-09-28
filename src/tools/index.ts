@@ -84,6 +84,19 @@ export const TOOLS = [
     }),
   },
   {
+    name: 'datacore_command_steps',
+    description: 'Track the numbered steps of a multi-step command (/today, /wrap-up, /tomorrow, ...) in the day\'s journal. op "start" writes every step as an unticked "- [ ]" line and returns a run_id; "tick" marks steps done with a timestamp (note = a one-line status when a step did not simply run); "status" returns done/pending; "resume" returns today\'s unfinished run of a command, or null; "steps" lists a command\'s steps. Works in any client — never depends on a harness task tool.',
+    inputSchema: z.object({
+      op: z.enum(['steps', 'start', 'tick', 'status', 'resume']),
+      command: z.string().optional().describe('Command name for steps/start/resume (e.g. "today", "wrap-up")'),
+      run_id: z.string().optional().describe('Run id returned by start, for tick/status'),
+      steps: z.array(z.string()).optional().describe('Step ids to tick, e.g. ["3"] or ["8b"]'),
+      note: z.string().optional().describe('For tick: one-line status, e.g. "skipped-by-user" or "not-applicable (no positions)"'),
+      space: z.string().optional().describe('Space by bare name whose journal holds the checklist; default: the personal space'),
+      date: z.string().optional().describe('YYYY-MM-DD for start/resume; default today'),
+    }),
+  },
+  {
     name: 'datacore_agent_list',
     description: 'List available Datacore agents (prompt templates in .datacore/agents/). Returns name, description, and model for each agent.',
     inputSchema: z.object({}),

@@ -16,6 +16,7 @@ import { handleSearch } from './tools/search.js'
 import { handleIngest } from './tools/ingest.js'
 import { handleStatus } from './tools/status.js'
 import { handleDate } from './tools/date.js'
+import { handleCommandSteps, type CommandStepsArgs } from './tools/command-steps.js'
 import {
   discoverModules,
   loadModuleTools,
@@ -241,6 +242,7 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
       case 'datacore_modules_health': result = await handleModulesHealth(validated as { module?: string }, storage, discoveredModules); break
       case 'datacore_command_list': result = handleCommandList(validated, storage); break
       case 'datacore_command_run': result = handleCommandRun(validated as { command: string }, storage); break
+      case 'datacore_command_steps': result = await handleCommandSteps(validated as CommandStepsArgs, storage); break
       case 'datacore_agent_list': result = handleAgentList(validated, storage); break
       case 'datacore_agent_run': result = handleAgentRun(validated as { agent: string }, storage); break
       default: throw new Error(`Unknown core tool: ${name}`)
@@ -370,14 +372,16 @@ Use Datacore for:
 - datacore_modules_* — manage installed modules
 - datacore_command_list — list available slash commands (/today, /tomorrow, /wrap-up, etc.)
 - datacore_command_run — load a command's full instructions to execute
+- datacore_command_steps — track a command's numbered steps in the journal (start, tick, status, resume)
 - datacore_agent_list — list available agents (specialized AI prompt templates)
 - datacore_agent_run — load an agent's full prompt for task routing
 
 When the user types a slash command like /today, /tomorrow, /wrap-up, /continue, /process-inbox:
 1. Call datacore_command_run with the command name
 2. Read the returned instructions
-3. Execute each step using your available tools
-4. Write output to the specified location (usually the journal)
+3. If it has numbered steps: datacore_command_steps op "resume", else op "start"; tick each step as it completes
+4. Execute each step using your available tools
+5. Write output to the specified location (usually the journal)
 
 For memory (engrams, learning, recall): use PLUR MCP tools (plur_session_start, plur_learn, plur_recall, etc.)`
 

@@ -155,6 +155,17 @@ export function handleCommandList(_args: Record<string, unknown>, storage: Stora
  * Returns the complete markdown body (after frontmatter) as instructions
  * for the AI agent to execute.
  */
+/**
+ * The file a command name resolves to — the core command first, else the module
+ * that declares it — or null. Same resolution as datacore_command_run.
+ */
+export function resolveCommandFile(command: string, storage: StorageConfig): string | null {
+  if (!/^[A-Za-z0-9][\w.:-]*$/.test(command)) return null
+  const core = join(storage.basePath, '.datacore', 'commands', `${command}.md`)
+  if (existsSync(core)) return core
+  return moduleDocs(storage, 'commands').find(d => d.name === command)?.filePath ?? null
+}
+
 export function handleCommandRun(args: { command: string }, storage: StorageConfig) {
   const commandsDir = join(storage.basePath, '.datacore', 'commands')
   let filePath = join(commandsDir, `${args.command}.md`)
@@ -184,6 +195,12 @@ export function handleCommandRun(args: { command: string }, storage: StorageConf
     description: (parsed?.frontmatter.description as string) ?? `${args.command} command`,
     instructions: body,
     source: filePath,
+    _hints: {
+      next: 'If the instructions have numbered steps, track them with datacore_command_steps '
+        + `(op "resume" then "start", command "${args.command}"), and tick each step as it completes. `
+        + 'The checklist lives in the journal, so it does not depend on this client having a task tool.',
+      related: ['datacore_command_steps'],
+    },
   }
 }
 
