@@ -338,8 +338,18 @@ export async function runHttp(): Promise<void> {
   const host = process.env.DATACORE_HTTP_HOST ?? '127.0.0.1'
   const server = createServer()
 
+  const token = process.env.DATACORE_HTTP_TOKEN
+
   const httpServer = createHttpServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/mcp') {
+      if (token) {
+        const auth = req.headers['authorization']
+        if (auth !== `Bearer ${token}`) {
+          res.writeHead(401, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Unauthorized' }))
+          return
+        }
+      }
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
       await server.connect(transport)
       await transport.handleRequest(req, res)
