@@ -9,6 +9,7 @@ import * as path from 'path'
 import type { StorageConfig } from '../storage.js'
 import { findPython, PYTHON_UNAVAILABLE_MESSAGE } from '../runtime-python.js'
 import { resolveCommandFile } from './commands.js'
+import { getActor } from '../context.js'
 
 export interface CommandStepsArgs {
   op: 'steps' | 'start' | 'tick' | 'status' | 'resume'
@@ -63,7 +64,8 @@ export async function handleCommandSteps(args: CommandStepsArgs, storage: Storag
   if (missing) return { op: args.op, error: missing }
   if (args.space && args.op !== 'steps') argv.push('--space', args.space)
 
-  const env = { ...process.env, DATACORE_ROOT: storage.basePath }
+  const actor = getActor()
+  const env = { ...process.env, DATACORE_ROOT: storage.basePath, ...(actor ? { DATACORE_ACTOR: actor } : {}) }
   try {
     const out = execFileSync(python, argv, { encoding: 'utf8', env, timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'] })
     return { op: args.op, result: JSON.parse(out) }

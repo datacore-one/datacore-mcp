@@ -7,6 +7,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import { ArgumentValidationError, toJsonSchema, validateArgs } from './schema.js'
+import { requestContext } from './context.js'
 import { assertStorageCurrent, detectStorage, initCore, type StorageConfig } from './storage.js'
 import { loadConfig } from './config.js'
 import { currentVersion, checkForUpdate } from './version.js'
@@ -338,21 +339,32 @@ export async function runHttp(): Promise<void> {
   const host = process.env.DATACORE_HTTP_HOST ?? '127.0.0.1'
   const server = createServer()
 
-  const token = process.env.DATACORE_HTTP_TOKEN
+  // Build token→actor map. Multi-token: DATACORE_HTTP_TOKEN_<ACTOR>=<token> per caller.
+  // Single-token compat: DATACORE_HTTP_TOKEN maps to actor 'http'.
+  const tokenMap = new Map<string, string>()
+  const singleToken = process.env.DATACORE_HTTP_TOKEN
+  if (singleToken) tokenMap.set(singleToken, 'http')
+  for (const [key, value] of Object.entries(process.env)) {
+    const m = key.match(/^DATACORE_HTTP_TOKEN_(.+)$/)
+    if (m && value) tokenMap.set(value, m[1].toLowerCase())
+  }
 
   const httpServer = createHttpServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/mcp') {
-      if (token) {
+      let actor: string | undefined
+      if (tokenMap.size > 0) {
         const auth = req.headers['authorization']
-        if (auth !== `Bearer ${token}`) {
+        const bearer = typeof auth === 'string' && auth.startsWith('Bearer ') ? auth.slice(7) : undefined
+        if (!bearer || !tokenMap.has(bearer)) {
           res.writeHead(401, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ error: 'Unauthorized' }))
           return
         }
+        actor = tokenMap.get(bearer)
       }
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
       await server.connect(transport)
-      await transport.handleRequest(req, res)
+      await requestContext.run({ actor }, () => transport.handleRequest(req, res))
     } else if (req.method === 'GET' && req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ status: 'ok', version: currentVersion }))
