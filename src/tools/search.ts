@@ -45,15 +45,18 @@ export async function handleSearch(
   // Semantic search via Datacortex bridge
   if (args.method === 'semantic' && bridge) {
     const availability = bridge.isAvailable()
+    let reason = availability.reason
     if (availability.available) {
       const result = await bridge.search(args.query, args.limit ?? 20)
       if (!result.fallback) {
         return { results: result.results, method: 'semantic' }
       }
+      reason = result.reason ?? 'the Datacortex bridge failed or gave an unusable answer'
     }
     const keywordResults = await keywordSearch(args, paths)
     return { ...keywordResults, method: 'keyword', fallback_warning:
-      ['Semantic search unavailable, using keyword fallback', keywordResults.fallback_warning].filter(Boolean).join('. ') }
+      [`Semantic search did not run: ${reason ?? 'the Datacortex bridge is unavailable'}. These are keyword results`,
+        keywordResults.fallback_warning].filter(Boolean).join('. ') }
   }
 
   return keywordSearch(args, paths)
