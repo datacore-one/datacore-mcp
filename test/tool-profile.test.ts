@@ -71,7 +71,10 @@ describe('tool profiles', () => {
     const root = makeInstall()
     try {
       await withServer(root, undefined, async (rpc) => {
-        const names = (await rpc('tools/list')).result.tools.map((t: any) => t.name)
+        const tools = (await rpc('tools/list')).result.tools
+        const names = tools.map((t: any) => t.name)
+        expect(tools.find((t: any) => t.name === 'datacore_command_run').annotations.readOnlyHint).toBe(true)
+        expect(tools.find((t: any) => t.name === 'datacore_command_steps').annotations?.readOnlyHint).not.toBe(true)
         expect(names).toContain('datacore_fixmod_echo')
         expect(names).not.toContain('datacore_call')
       })
@@ -82,7 +85,9 @@ describe('tool profiles', () => {
     const root = makeInstall()
     try {
       await withServer(root, 'cursor', async (rpc) => {
-        const names = (await rpc('tools/list')).result.tools.map((t: any) => t.name)
+        const tools = (await rpc('tools/list')).result.tools
+        const names = tools.map((t: any) => t.name)
+        expect(tools.find((t: any) => t.name === 'datacore_command_list').annotations.readOnlyHint).toBe(true)
         expect(names).toContain('datacore_call')
         expect(names).toContain('datacore_status')
         expect(names).not.toContain('datacore_fixmod_echo')

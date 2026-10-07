@@ -78,9 +78,10 @@ export const TOOLS = [
   },
   {
     name: 'datacore_command_run',
-    description: 'Load a Datacore command\'s full instructions by name. Returns the complete workflow specification (markdown body after frontmatter) for the AI agent to execute. Use when the user invokes a slash command like /today, /tomorrow, /wrap-up, /continue, /process-inbox, /research, etc.',
+    description: 'Load the canonical Datacore workflow for the current agent to execute. Use for slash commands or ordinary requests such as "run Datacore today" or "continue project X". Loading does not execute the command. Native shortcuts are optional.',
     inputSchema: z.object({
       command: z.string().describe('Command name (e.g., "today", "tomorrow", "wrap-up")'),
+      arguments: z.string().optional().describe('User-supplied text after the command name, preserved as data (e.g. a research topic, project name, or --save). Corresponds to $ARGUMENTS in workflow instructions.'),
     }),
   },
   {

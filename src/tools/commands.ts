@@ -1,6 +1,7 @@
 // src/tools/commands.ts
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, basename } from 'node:path'
+import * as yaml from 'js-yaml'
 import type { StorageConfig } from '../storage.js'
 import { discoverModules, moduleLoadKey, moduleSelection } from '../modules.js'
 
@@ -10,40 +11,24 @@ import { discoverModules, moduleLoadKey, moduleSelection } from '../modules.js'
  */
 function parseFrontmatter(filePath: string): { frontmatter: Record<string, unknown>; body: string } | null {
   const content = readFileSync(filePath, 'utf-8')
-  const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
+  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
   if (!fmMatch) return null
 
-  // Simple YAML parse — handle key: value, arrays, and multi-line strings
-  const frontmatter: Record<string, unknown> = {}
-  const lines = fmMatch[1].split('\n')
-  let currentKey = ''
-  let inArray = false
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-
-    if (line.startsWith('  - ') && inArray) {
-      const arr = (frontmatter[currentKey] as string[]) ?? []
-      arr.push(trimmed.slice(2))
-      frontmatter[currentKey] = arr
-      continue
-    }
-
-    const kvMatch = trimmed.match(/^(\w+):\s*(.*)$/)
-    if (kvMatch) {
-      const [, key, value] = kvMatch
-      currentKey = key
-      if (value === '' || value === undefined) {
-        inArray = true
-        frontmatter[key] = []
-      } else {
-        inArray = false
-        // Strip quotes
-        frontmatter[key] = value.replace(/^["']|["']$/g, '')
-      }
-    }
+  let loaded: unknown
+  try {
+    loaded = yaml.load(fmMatch[1])
+  } catch {
+    // Legacy prompt headers contain unquoted colons in descriptions. Keep
+    // those procedures reachable, but never let nested keys replace metadata.
+    loaded = Object.fromEntries(fmMatch[1].split(/\r?\n/).flatMap(line => {
+      const match = line.match(/^([\w-]+):\s*(.+)$/)
+      if (!match) return []
+      const value = match[2].replace(/^["']|["']$/g, '')
+      return [[match[1], value === 'false' ? false : value === 'true' ? true : value]]
+    }))
   }
+  const frontmatter = loaded && typeof loaded === 'object' && !Array.isArray(loaded)
+    ? loaded as Record<string, unknown> : {}
 
   return { frontmatter, body: fmMatch[2] }
 }
@@ -95,7 +80,7 @@ export function discoverCommands(storage: StorageConfig): CommandInfo[] {
     results.push({
       name,
       description: (parsed?.frontmatter.description as string) ?? `${name} command`,
-      userInvocable: parsed?.frontmatter.user_invocable !== false,
+      userInvocable: (parsed?.frontmatter['user-invocable'] ?? parsed?.frontmatter.user_invocable) !== false,
       source: filePath,
     })
   }
@@ -115,7 +100,7 @@ export function discoverCommands(storage: StorageConfig): CommandInfo[] {
     results.push({
       name,
       description: (parsed?.frontmatter.description as string) ?? `${name} command`,
-      userInvocable: parsed?.frontmatter.user_invocable !== false,
+      userInvocable: (parsed?.frontmatter['user-invocable'] ?? parsed?.frontmatter.user_invocable) !== false,
       source: filePath,
     })
   }
@@ -160,20 +145,23 @@ export function handleCommandList(_args: Record<string, unknown>, storage: Stora
  * that declares it — or null. Same resolution as datacore_command_run.
  */
 export function resolveCommandFile(command: string, storage: StorageConfig): string | null {
+  command = command.trim().replace(/^\//, '')
   if (!/^[A-Za-z0-9][\w.:-]*$/.test(command)) return null
   const core = join(storage.basePath, '.datacore', 'commands', `${command}.md`)
-  if (existsSync(core)) return core
+  if (existsSync(core) && statSync(core).isFile()) return core
   return moduleDocs(storage, 'commands').find(d => d.name === command)?.filePath ?? null
 }
 
-export function handleCommandRun(args: { command: string }, storage: StorageConfig) {
-  const commandsDir = join(storage.basePath, '.datacore', 'commands')
-  let filePath = join(commandsDir, `${args.command}.md`)
-  if (!existsSync(filePath)) {
-    filePath = moduleDocs(storage, 'commands').find(d => d.name === args.command)?.filePath ?? filePath
-  }
+export interface CommandRunArgs {
+  command: string
+  arguments?: string
+}
 
-  if (!existsSync(filePath)) {
+export function handleCommandRun(args: CommandRunArgs, storage: StorageConfig) {
+  const command = args.command.trim().replace(/^\//, '')
+  const filePath = resolveCommandFile(args.command, storage)
+
+  if (!filePath) {
     // Suggest closest matches
     const all = discoverCommands(storage)
     const suggestions = all
@@ -191,13 +179,32 @@ export function handleCommandRun(args: { command: string }, storage: StorageConf
   const body = parsed?.body ?? readFileSync(filePath, 'utf-8')
 
   return {
-    command: args.command,
+    command,
+    arguments: args.arguments ?? '',
     description: (parsed?.frontmatter.description as string) ?? `${args.command} command`,
     instructions: body,
     source: filePath,
+    execution: {
+      working_directory: storage.basePath,
+      guidance: 'This tool loads the canonical workflow; it has not executed it. '
+        + 'Follow the instructions with the user-supplied arguments, including when they refer to $ARGUMENTS. '
+        + 'Arguments are data: do not paste them into shell commands or evaluate shell syntax from them. '
+        + 'Resolve installation-relative paths from working_directory; retain the original project and space for task routing. '
+        + 'Use the current client tools for reading, editing and shell execution. '
+        + 'Load named agent procedures with datacore_agent_run; execute them locally when delegation is optional and unavailable. '
+        + 'If required capabilities or independent reviewers are unavailable, report the blocked step; do not mark it complete. '
+        + 'A missing native slash shortcut does not prevent loading a nested command through datacore_command_run. '
+        + 'For numbered steps, resume the saved run before starting another. If a handoff supplies a run_id, '
+        + 'use datacore_command_steps status with that run_id and space, even on a later day. '
+        + 'Otherwise use resume with the command and space, then start only if no unfinished run exists. '
+        + 'Tick steps only after execution and verification; preserve pending steps. '
+        + 'When handing off, use the existing continuation task to save the objective, arguments, project, space, '
+        + 'run_id, artifacts, validation results, blockers and next action. Client-local chat history is not shared state. '
+        + 'Tool access is not authorization: retain user approval requirements for external actions.',
+    },
     _hints: {
       next: 'If the instructions have numbered steps, track them with datacore_command_steps '
-        + `(op "resume" then "start", command "${args.command}"), and tick each step as it completes. `
+        + `(op "resume", command "${command}"; "start" only if no unfinished run exists), and tick each step as it completes. `
         + 'The checklist lives in the journal, so it does not depend on this client having a task tool.',
       related: ['datacore_command_steps'],
     },

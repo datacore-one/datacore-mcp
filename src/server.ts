@@ -66,6 +66,15 @@ export function resolveToolProfile(value = process.env.DATACORE_TOOL_PROFILE): T
 }
 
 const CALL_TOOL_NAME = 'datacore_call'
+// Discovery and prompt loading do not execute a workflow. Tell clients so;
+// otherwise headless Codex treats even listing commands as an unknown write.
+const READ_ONLY_PROCEDURES = new Set([
+  'datacore_command_list', 'datacore_command_run',
+  'datacore_agent_list', 'datacore_agent_run',
+])
+const procedureAnnotations = (name: string) => READ_ONLY_PROCEDURES.has(name)
+  ? { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }
+  : {}
 const CALL_TOOL_SCHEMA = z.object({
   tool: z.string().optional().describe('Full tool name, e.g. datacore_gtd_add_task. Omit to list every tool this can reach, with its argument schema.'),
   args: z.record(z.string(), z.unknown()).optional().describe('Arguments for that tool, exactly as its schema describes.'),
@@ -114,6 +123,7 @@ export function createServer(): Server {
         tools: [...coreTools, CALL_TOOL].map(t => ({
           name: t.name,
           description: t.description,
+          ...procedureAnnotations(t.name),
           inputSchema: z.toJSONSchema(t.inputSchema),
         })),
       }
@@ -123,6 +133,7 @@ export function createServer(): Server {
         ...coreTools.map(t => ({
           name: t.name,
           description: t.description,
+          ...procedureAnnotations(t.name),
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           inputSchema: z.toJSONSchema(t.inputSchema),
         })),
@@ -242,7 +253,7 @@ async function routeToolInner(name: string, args: Record<string, unknown>): Prom
       case 'datacore_modules_info': result = await handleModulesInfo(validated as { module: string }, storage, discoveredModules); break
       case 'datacore_modules_health': result = await handleModulesHealth(validated as { module?: string }, storage, discoveredModules); break
       case 'datacore_command_list': result = handleCommandList(validated, storage); break
-      case 'datacore_command_run': result = handleCommandRun(validated as { command: string }, storage); break
+      case 'datacore_command_run': result = handleCommandRun(validated as { command: string; arguments?: string }, storage); break
       case 'datacore_command_steps': result = await handleCommandSteps(validated as CommandStepsArgs, storage); break
       case 'datacore_agent_list': result = handleAgentList(validated, storage); break
       case 'datacore_agent_run': result = handleAgentRun(validated as { agent: string }, storage); break
@@ -398,12 +409,14 @@ Use Datacore for:
 - datacore_agent_list — list available agents (specialized AI prompt templates)
 - datacore_agent_run — load an agent's full prompt for task routing
 
-When the user types a slash command like /today, /tomorrow, /wrap-up, /continue, /process-inbox:
-1. Call datacore_command_run with the command name
-2. Read the returned instructions
-3. If it has numbered steps: datacore_command_steps op "resume", else op "start"; tick each step as it completes
+When the user invokes a slash command OR asks in ordinary text to run a Datacore workflow:
+1. Call datacore_command_list if the name is unclear, then datacore_command_run with the command name and user-supplied arguments
+2. Read the returned instructions and execution guidance; loading is not execution
+3. For numbered steps, use datacore_command_steps: status for a handed-off run_id (with its space), otherwise resume; start only when there is no unfinished run. Tick each step after verification
 4. Execute each step using your available tools
 5. Write output to the specified location (usually the journal)
+
+Native slash shortcuts and client-local task tools are optional. All clients use the same command files and journal checklist. Follow existing continuation tasks to resume work across clients; preserve the project, space, arguments, run_id, artifacts, blockers and next action. Never silently skip a required capability or treat a loaded agent prompt as an executed subagent.
 
 For memory (engrams, learning, recall): use PLUR MCP tools (plur_session_start, plur_learn, plur_recall, etc.)`
 
