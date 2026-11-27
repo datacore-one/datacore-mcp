@@ -7,8 +7,55 @@ import { logger } from './logger.js'
 import { toJsonSchema } from './schema.js'
 import type { StorageConfig } from './storage.js'
 import { readSpaceCatalog, personalSpace } from './space-catalog.js'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import * as nodeModule from 'node:module'
 import { moduleDataPath, validModuleName } from './module-data.js'
+
+// --- Runtime binding ---
+
+/**
+ * The specifier module tools use for shared runtime dependencies.
+ * It always binds to the runtime of the server doing the loading, never to a
+ * copy Node's directory walk happens to find. A stale copy brings its own zod,
+ * and converting one zod version's schema with another crashed on a record
+ * with a pattern-checked key: the gtd module's add_task was silently dropped
+ * (2026-11-27). Where no copy was installed at all, every module tool failed.
+ */
+export const RUNTIME_SPECIFIER = '@datacore-one/mcp/runtime'
+let runtimeBound = false
+
+/** This server's runtime entry: next to the bundle, or the build output when run from source. */
+export function ownRuntimeUrl(): string | null {
+  for (const rel of ['./runtime.js', '../dist/runtime.js']) {
+    const url = new URL(rel, import.meta.url)
+    if (fs.existsSync(fileURLToPath(url))) return url.href
+  }
+  return null
+}
+
+export function bindModuleRuntime(): boolean {
+  if (runtimeBound) return true
+  const url = ownRuntimeUrl()
+  if (!url) {
+    logger.warning('Datacore runtime entry not found next to the server; module runtime imports resolve from disk.')
+    return false
+  }
+  const registerHooks = (nodeModule as unknown as { registerHooks?: (hooks: object) => unknown }).registerHooks
+  if (typeof registerHooks === 'function') {
+    registerHooks({
+      resolve(specifier: string, context: unknown, next: (s: string, c: unknown) => unknown) {
+        return specifier === RUNTIME_SPECIFIER ? { url, shortCircuit: true } : next(specifier, context)
+      },
+    })
+  } else {
+    // Node 22 before registerHooks: the off-thread loader hook does the same.
+    nodeModule.register('data:text/javascript,' + encodeURIComponent(
+      `export async function resolve(s, c, next) { return s === ${JSON.stringify(RUNTIME_SPECIFIER)}`
+      + ` ? { url: ${JSON.stringify(url)}, shortCircuit: true } : next(s, c) }`))
+  }
+  runtimeBound = true
+  return true
+}
 
 export interface ModuleToolDefinition {
   name: string              // Without namespace prefix (e.g., 'inbox_count')
@@ -210,6 +257,7 @@ export async function loadModuleTools(
   reservedNames: readonly string[] = [],
 ): Promise<RegisteredModuleTool[]> {
   const tools: RegisteredModuleTool[] = []
+  bindModuleRuntime()
   moduleLoadErrors.clear()
   moduleRegisteredTools.clear()
   moduleSelection.clear()

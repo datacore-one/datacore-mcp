@@ -7,9 +7,11 @@
  * Usage in module tools/index.ts:
  *   import { z, yaml } from '@datacore-one/mcp/runtime'
  *
- * DIP-0049 (Draft) discusses module runtime dependencies. This export must
- * itself be resolvable from the module's installed package environment;
- * exports alone do not add a global ESM search path.
+ * DIP-0049 (Draft) discusses module runtime dependencies. Inside the server,
+ * the module loader binds this specifier to the loading server's own copy
+ * (bindModuleRuntime in modules.ts), so a module always gets the runtime of
+ * the server that runs it, with no install beside the module. Outside the
+ * server (a module's own tests) it resolves from the package environment.
  */
 
 export { z } from 'zod'
